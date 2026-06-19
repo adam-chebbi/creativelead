@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Templates — AutoReach{% endblock %}
+{% block page_title %}Email Template{% endblock %}
+{% block page_subtitle %}Customise the base prompt — Groq personalises it per lead{% endblock %}
+
+{% block content %}
+<div style="max-width:680px;">
+  <div class="notice notice-info" style="margin-bottom:16px;">
+    <span class="notice-icon">ℹ</span>
+    <div>
+      Available placeholders: <code>{name}</code> — business name &nbsp;·&nbsp;
+      <code>{address}</code> — business address &nbsp;·&nbsp;
+      <code>{sender_name}</code> — your name
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="margin-bottom:16px;">Email Body Template</div>
+    <form method="POST">
+      <div class="form-group">
+        <textarea name="template" rows="14"
+          style="font-family:var(--mono); font-size:13px; line-height:1.7;">{{ template }}</textarea>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Template</button>
+        <a href="{{ url_for('outreach') }}" class="btn btn-secondary">← Back</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="notice notice-warning">
+    <span class="notice-icon">⚠</span>
+    <div>
+      If no template is saved, Groq generates each email from scratch.
+      With a template saved here, Groq uses it as the base and personalises the details.
+    </div>
+  </div>
+</div>
+{% endblock %}

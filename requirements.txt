@@ -1,0 +1,8 @@
+flask
+requests
+groq
+beautifulsoup4
+schedule
+gunicorn
+flask-cors
+PyJWT

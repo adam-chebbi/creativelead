@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Leads — AutoReach{% endblock %}
+{% block page_title %}Leads{% endblock %}
+{% block page_subtitle %}{{ businesses | length }} businesses tracked{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('import_leads') }}" class="btn btn-secondary btn-sm" style="white-space:nowrap;">↑ Import</a>
+  <a href="{{ url_for('export_leads') }}" class="btn btn-secondary btn-sm" style="white-space:nowrap;">↓ Export</a>
+  <a href="{{ url_for('pipeline') }}" class="btn btn-secondary btn-sm" style="white-space:nowrap;">▥ Pipeline</a>
+  <a href="{{ url_for('add_lead') }}" class="btn btn-primary btn-sm" style="white-space:nowrap;">+ Add Lead</a>
+{% endblock %}
+
+{% block content %}
+
+{% set with_email    = businesses | selectattr('email') | list | length %}
+{% set without_email = businesses | rejectattr('email') | list | length %}
+
+<div class="action-bar">
+  <div class="action-bar-left">
+    <a href="{{ url_for('find_leads') }}" class="btn btn-secondary btn-sm">⌕ Find via Google Maps</a>
+    <form method="POST" action="{{ url_for('scrape_emails_route') }}" style="display:inline;">
+      <button type="submit" class="btn btn-secondary btn-sm">↯ Scrape Emails</button>
+    </form>
+  </div>
+  <div style="display:flex; gap:12px; font-size:12px; color:var(--text-3);">
+    <span><span style="color:var(--green); font-weight:600;">{{ with_email }}</span> with email</span>
+    <span>·</span>
+    <span><span style="color:var(--text-3);">{{ without_email }}</span> missing email</span>
+  </div>
+</div>
+
+{% if businesses %}
+<style>
+  @media (max-width: 768px) {
+    .col-address, .col-notes { display: none; }
+    .col-contact .badge { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+  }
+</style>
+<div class="table-wrap table-scroll">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:32px;">#</th>
+        <th>Business</th>
+        <th class="col-address">Address</th>
+        <th class="col-contact">Contact</th>
+        <th>Stage</th>
+        <th class="col-notes">Notes</th>
+        <th style="width:36px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in businesses %}
+      {% set stage_color = stage_colors[b.stage or 'New'] %}
+      <tr>
+        <td style="color:var(--text-3); font-family:var(--mono); font-size:11px;">{{ loop.index }}</td>
+
+        <td>
+          <div style="font-weight:600; color:var(--text); font-size:13px; white-space:nowrap;">{{ b.name }}</div>
+          {% if b.website %}
+            <a href="{{ b.website }}" target="_blank" rel="noopener"
+               style="font-size:11px; color:var(--text-3); font-family:var(--mono);">
+              {{ b.website | replace('https://','') | replace('http://','') | truncate(32) }}
+            </a>
+          {% endif %}
+        </td>
+
+        <td class="col-address" style="font-size:12px; color:var(--text-3); max-width:160px;">
+          {{ b.address | truncate(40) if b.address else '—' }}
+        </td>
+
+        <td class="col-contact">
+          {% if b.email %}
+            <span class="badge badge-teal">{{ b.email }}</span>
+          {% elif b.phone %}
+            <span class="badge badge-gray">{{ b.phone }}</span>
+          {% else %}
+            <span class="badge badge-gray" style="opacity:.5;">no contact</span>
+          {% endif %}
+        </td>
+
+        <td style="white-space:nowrap;">
+          <select class="stage-select" data-name="{{ b.name }}"
+            style="background:transparent; border:1px solid var(--border-hi); border-radius:6px;
+                   padding:4px 8px; font-size:12px; font-family:var(--font); cursor:pointer;
+                   color:{{ stage_color }}; min-width:100px;">
+            {% for s in stages %}
+              <option value="{{ s }}" {% if (b.stage or 'New') == s %}selected{% endif %}
+                      style="background:var(--bg-raised); color:{{ stage_colors[s] }};">
+                {{ s }}
+              </option>
+            {% endfor %}
+          </select>
+        </td>
+
+        <td class="col-notes">
+          <input type="text" class="notes-input" data-name="{{ b.name }}"
+                 value="{{ b.notes or '' }}" placeholder="Add note…"
+                 style="background:transparent; border:1px solid transparent; border-radius:6px;
+                        padding:4px 8px; font-size:12px; font-family:var(--font);
+                        color:var(--text-2); width:160px; transition:border-color .15s;">
+        </td>
+
+        <td>
+          <form method="POST" action="{{ url_for('delete_lead') }}"
+                onsubmit="return confirm('Delete {{ b.name }}?');">
+            <button type="submit" class="btn btn-danger btn-sm" style="padding:3px 8px; font-size:11px;">✕</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">◈</div>
+  <h3>No leads yet</h3>
+  <p>Find businesses or add them manually to get started.</p>
+  <div style="display:flex; gap:8px; justify-content:center;">
+    <a href="{{ url_for('find_leads') }}" class="btn btn-primary">⌕ Find via Google Maps</a>
+    <a href="{{ url_for('add_lead') }}" class="btn btn-secondary">+ Add Manually</a>
+  </div>
+</div>
+{% endif %}
+
+<script>
+const _stageColors = {{ stage_colors | tojson }};
+
+document.querySelectorAll('.stage-select').forEach(sel => {
+  sel.addEventListener('change', async function() {
+    try {
+      const resp = await fetch('/update_stage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+        body: `name=${encodeURIComponent(this.dataset.name)}&stage=${encodeURIComponent(this.value)}`
+      });
+      if ((await resp.json()).ok) {
+        this.style.color = _stageColors[this.value];
+      }
+    } catch(e) {}
+  });
+});
+
+document.querySelectorAll('.notes-input').forEach(inp => {
+  inp.addEventListener('focus', function() { this.style.borderColor = 'var(--border-hi)'; });
+  inp.addEventListener('blur',  function() { this.style.borderColor = 'transparent'; });
+
+  let timer;
+  inp.addEventListener('input', function() {
+    clearTimeout(timer);
+    const el = this;
+    timer = setTimeout(async () => {
+      try {
+        await fetch('/update_notes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `name=${encodeURIComponent(el.dataset.name)}&notes=${encodeURIComponent(el.value)}`
+        });
+        el.style.borderColor = 'var(--teal)';
+        setTimeout(() => el.style.borderColor = 'transparent', 1200);
+      } catch(e) {}
+    }, 700);
+  });
+});
+</script>
+
+{% endblock %}

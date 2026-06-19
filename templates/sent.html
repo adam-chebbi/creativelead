@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Sent — AutoReach{% endblock %}
+{% block page_title %}Sent Emails{% endblock %}
+{% block page_subtitle %}{{ sent_emails | length }} email{{ 's' if sent_emails | length != 1 else '' }} sent{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('outreach') }}" class="btn btn-primary btn-sm">◎ New Campaign</a>
+{% endblock %}
+
+{% block content %}
+
+{% if sent_emails %}
+<div class="notice notice-info" style="margin-bottom:16px;">
+  <span class="notice-icon">ℹ</span>
+  <div>Hit <strong>↺</strong> on any row to remove them from the sent log — they'll appear again in your next campaign so you can re-contact them.</div>
+</div>
+<div class="table-wrap table-scroll">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:32px;">#</th>
+        <th>Business</th>
+        <th>Email</th>
+        <th>Subject</th>
+        <th>Sent</th>
+        <th style="width:36px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in sent_emails %}
+      <tr>
+        <td style="color:var(--text-3); font-family:var(--mono); font-size:11px;">{{ loop.index }}</td>
+        <td style="font-weight:600; color:var(--text);">{{ e.business_name }}</td>
+        <td><span style="font-family:var(--mono); font-size:12px; color:var(--text-2);">{{ e.email }}</span></td>
+        <td style="color:var(--text-2);">{{ e.subject }}</td>
+        <td style="font-family:var(--mono); font-size:11px; color:var(--text-3); white-space:nowrap;">{{ e.date_sent }}</td>
+        <td>
+          <form method="POST" action="{{ url_for('delete_sent') }}"
+                onsubmit="return confirm('Remove {{ e.business_name }} from sent log? They can be contacted again.');">
+            <input type="hidden" name="id" value="{{ e.id }}">
+            <button type="submit" class="btn btn-danger btn-sm" title="Re-enable for outreach">↺</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">↗</div>
+  <h3>No emails sent yet</h3>
+  <p>Run your first campaign to start reaching out.</p>
+  <a href="{{ url_for('outreach') }}" class="btn btn-primary">◎ Start Campaign</a>
+</div>
+{% endif %}
+
+{% endblock %}
