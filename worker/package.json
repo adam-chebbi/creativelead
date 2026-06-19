@@ -1,7 +1,7 @@
 {
   "name": "autoreach-worker",
   "version": "2.0.0",
-  "description": "AutoReach V2 Desktop Worker",
+  "description": "AutoReach V2 Desktop Worker — scraping runs on the user's machine",
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "concurrently \"tsc -p tsconfig.main.json -w\" \"tsc -p tsconfig.renderer.json -w\" \"electron .\"",
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "axios": "^1.7.2",
+    "electron-log": "^5.1.5",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.2.1",
     "playwright": "^1.44.1",
@@ -39,9 +40,13 @@
     "appId": "dev.autoreach.worker",
     "productName": "AutoReach Worker",
     "directories": { "output": "release" },
-    "files": ["dist/**/*", "src/renderer/index.html"],
+    "files": [
+      "dist/**/*",
+      "src/renderer/index.html",
+      "src/renderer/styles.css"
+    ],
     "win":   { "target": "nsis",     "icon": "assets/icon.ico" },
-    "mac":   { "target": "dmg",      "icon": "assets/icon.icns" },
+    "mac":   { "target": "dmg",      "icon": "assets/icon.icns", "hardenedRuntime": true },
     "linux": { "target": "AppImage", "icon": "assets/icon.png" },
     "publish": { "provider": "github", "releaseType": "release" },
     "extraMetadata": { "apiBaseUrl": "https://api.autoreach.dev" }

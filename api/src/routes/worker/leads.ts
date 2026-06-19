@@ -33,6 +33,34 @@ const BulkSchema = z.object({
 });
 
 /**
+ * GET /api/worker/leads/find?googleMapsUrl=...
+ *
+ * Lets the scraping engine look up a lead's DB id by its Google Maps URL.
+ * Uses worker token auth (not dashboard JWT) so the engine can call it directly.
+ */
+leadsRouter.get('/find', async (req: Request, res: Response): Promise<void> => {
+  const googleMapsUrl = req.query.googleMapsUrl as string;
+  if (!googleMapsUrl) {
+    res.status(400).json({ error: 'googleMapsUrl query param required' });
+    return;
+  }
+  try {
+    const lead = await prisma.business.findFirst({
+      where: { userId: req.userId, googleMapsUrl },
+      select: { id: true, name: true, googleMapsUrl: true },
+    });
+    if (!lead) {
+      res.status(404).json({ error: 'Lead not found' });
+      return;
+    }
+    res.json({ id: lead.id, name: lead.name, googleMapsUrl: lead.googleMapsUrl });
+  } catch (err) {
+    console.error('[worker/leads/find]', err);
+    res.status(500).json({ error: 'Failed to find lead' });
+  }
+});
+
+/**
  * POST /api/worker/leads
  *
  * Bulk upsert leads from the desktop worker.
@@ -53,13 +81,13 @@ leadsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
 
   for (const lead of leads) {
     try {
-      const data = {
+      const commonData = {
         name:         lead.name,
         address:      lead.address,
         phone:        lead.phone,
         website:      lead.website,
         email:        lead.email,
-        rating:       lead.rating != null ? new Prisma.Decimal(lead.rating) : null,
+        rating:       lead.rating    != null ? new Prisma.Decimal(lead.rating)    : null,
         reviewCount:  lead.reviewCount ?? null,
         category:     lead.category,
         city:         lead.city,
@@ -68,10 +96,17 @@ leadsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
         longitude:    lead.longitude != null ? new Prisma.Decimal(lead.longitude) : null,
         plusCode:     lead.plusCode  ?? null,
         photoCount:   lead.photoCount ?? null,
-        openingHours: (lead.openingHours  ?? null) as Prisma.InputJsonValue | null,
-        attributes:   (lead.attributes   ?? null) as Prisma.InputJsonValue | null,
-        popularTimes: (lead.popularTimes  ?? null) as Prisma.InputJsonValue | null,
-        sessionId:    lead.sessionId ?? null,
+        // Use Prisma.JsonNull for null JSON fields — avoids type errors
+        openingHours: lead.openingHours != null
+          ? (lead.openingHours as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+        attributes: lead.attributes != null
+          ? (lead.attributes as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+        popularTimes: lead.popularTimes != null
+          ? (lead.popularTimes as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+        sessionId: lead.sessionId ?? null,
       };
 
       if (lead.googleMapsUrl) {
@@ -81,22 +116,22 @@ leadsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
         });
 
         if (existing) {
-          await prisma.business.update({ where: { id: existing.id }, data });
+          await prisma.business.update({ where: { id: existing.id }, data: commonData });
           updated++;
         } else {
           const created = await prisma.business.create({
-            data: { userId, googleMapsUrl: lead.googleMapsUrl, ...data },
+            data: { userId, googleMapsUrl: lead.googleMapsUrl, ...commonData },
           });
           inserted++;
           insertedLeads.push({ id: created.id, name: created.name, city: created.city });
         }
       } else {
-        const created = await prisma.business.create({ data: { userId, ...data } });
+        const created = await prisma.business.create({ data: { userId, ...commonData } });
         inserted++;
         insertedLeads.push({ id: created.id, name: created.name, city: created.city });
       }
     } catch (err) {
-      console.error(`[leads] Failed to upsert "${lead.name}":`, err);
+      console.error(`[worker/leads] Failed to upsert "${lead.name}":`, err);
       skipped++;
     }
   }
@@ -109,9 +144,12 @@ leadsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
       .catch(() => {});
   }
 
-  // Broadcast to dashboard
+  // Broadcast new leads to dashboard
   if (insertedLeads.length > 0) {
-    broadcastToUser(userId, 'leads:new', { count: insertedLeads.length, leads: insertedLeads }).catch(() => {});
+    broadcastToUser(userId, 'leads:new', {
+      count: insertedLeads.length,
+      leads: insertedLeads,
+    }).catch(() => {});
   }
 
   res.status(201).json({ ok: true, inserted, updated, skipped, total: leads.length });
