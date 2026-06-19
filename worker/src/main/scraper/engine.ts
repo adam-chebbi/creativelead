@@ -46,13 +46,13 @@ export class ScrapingEngine extends EventEmitter {
 
     const executablePath = detectUserBrowser();
     const browserName    = getBrowserName(executablePath);
-    const slowMo = 40 + Math.floor(Math.random() * 40);
-    const userDataDir = path.join(os.homedir(), '.autoreach-worker-profile');
+    const slowMo         = 40 + Math.floor(Math.random() * 40); // 40-80ms
+    const userDataDir    = path.join(os.homedir(), '.autoreach-worker-profile');
 
     this.log(`Launching ${browserName}...`, 'system');
 
     const launchOptions: Parameters<typeof chromium.launchPersistentContext>[1] = {
-      headless: false,
+      headless: false,   // ALWAYS visible — core product feature
       slowMo,
       viewport: { width: 1280, height: 800 },
       userAgent: `Mozilla/5.0 (${
@@ -65,6 +65,7 @@ export class ScrapingEngine extends EventEmitter {
         '--no-default-browser-check',
         '--disable-blink-features=AutomationControlled',
         '--disable-infobars',
+        '--disable-extensions-except=',
       ],
     };
 
@@ -73,9 +74,11 @@ export class ScrapingEngine extends EventEmitter {
     this.context = await chromium.launchPersistentContext(userDataDir, launchOptions);
     this.page    = await this.context.newPage();
 
-    // Remove automation fingerprint
-    await this.page.addInitScript(() => {
+    // Remove automation fingerprint from every page
+    await this.context.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      // Also spoof plugins length to look like a real browser
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
     });
 
     this.emit('browser-ready');
@@ -104,6 +107,7 @@ export class ScrapingEngine extends EventEmitter {
       for (const lead of leads) {
         if (!this.running) break;
 
+        // CAPTCHA check before each business
         if (await detectCaptcha(this.page)) {
           this.captchaWaiting = true;
           this.emit('captcha-detected');
@@ -112,6 +116,7 @@ export class ScrapingEngine extends EventEmitter {
           this.captchaWaiting = false;
         }
 
+        // Pause check
         while (this.paused && this.running) {
           await new Promise(r => setTimeout(r, 500));
         }
@@ -125,28 +130,27 @@ export class ScrapingEngine extends EventEmitter {
         Object.assign(lead, detail);
         detailCount++;
 
-        // Upload lead first — get DB id back via search
+        // ── Upload lead via worker endpoint (uses worker token auth) ──────────
         let businessDbId: string | null = null;
         try {
+          // Upload the lead
           await apiClient.post('/api/worker/leads', {
             leads: [{ ...lead, sessionId: config.sessionId }],
           });
-          // Retrieve the DB id by searching for this lead
+
+          // Look up the DB id using the dedicated worker find endpoint
           if (lead.googleMapsUrl) {
-            const findRes = await apiClient.get<{ data: { id: string; googleMapsUrl: string }[] }>(
-              '/api/dashboard/leads',
-              { params: { search: lead.name, limit: 5 } }
+            const findRes = await apiClient.get<{ id: string } | null>(
+              '/api/worker/leads/find',
+              { params: { googleMapsUrl: lead.googleMapsUrl } }
             );
-            const match = findRes.data?.data?.find(
-              (l) => l.googleMapsUrl === lead.googleMapsUrl
-            );
-            businessDbId = match?.id ?? null;
+            businessDbId = findRes.data?.id ?? null;
           }
         } catch (err) {
-          this.log(`Upload failed for ${lead.name}: ${(err as Error).message}`, 'warn');
+          this.log(`Upload failed for "${lead.name}": ${(err as Error).message}`, 'warn');
         }
 
-        // Scrape & upload reviews
+        // ── Scrape & upload reviews ───────────────────────────────────────────
         if (config.scrapeReviews && (lead.reviewCount ?? 0) > 0 && businessDbId) {
           const navOk = await navigateToReviews(this.page, (msg) => this.log(msg));
           if (navOk) {
