@@ -1,7 +1,7 @@
 {
-  "name": "autoreach-api",
+  "name": "creative-leads-api",
   "version": "1.0.0",
-  "description": "AutoReach V2 — API Bridge (Worker ↔ Dashboard)",
+  "description": "Creative Leads — API Bridge (Worker ↔ Dashboard)",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",

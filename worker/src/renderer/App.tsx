@@ -72,8 +72,8 @@ export default function App() {
 
       {/* Logo bar */}
       <div className="px-5 py-4 flex items-center gap-2 border-b" style={{ borderColor: '#1e3232' }}>
-        <div className="w-7 h-7 rounded-md flex items-center justify-center text-white text-xs" style={{ background: '#e8806a' }}>✉</div>
-        <span className="font-bold text-white text-sm">AUTO<span style={{ color: '#e8806a' }}>REACH</span></span>
+        <div className="w-7 h-7 rounded-md flex items-center justify-center text-white text-xs font-bold" style={{ background: 'linear-gradient(135deg, #4ecdc4, #e8806a)' }}>CL</div>
+        <span className="font-bold text-white text-sm">Creative<span style={{ color: '#4ecdc4' }}>Leads</span></span>
         <span className="ml-auto text-xs" style={{ color: '#6a9090' }}>Worker v2.0.0</span>
       </div>
 

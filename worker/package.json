@@ -1,7 +1,7 @@
 {
-  "name": "autoreach-worker",
+  "name": "creative-leads-worker",
   "version": "2.0.0",
-  "description": "AutoReach V2 Desktop Worker — scraping runs on the user's machine",
+  "description": "Creative Leads Desktop Worker — scraping runs on the user's machine",
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "concurrently \"tsc -p tsconfig.main.json -w\" \"tsc -p tsconfig.renderer.json -w\" \"electron .\"",
@@ -37,8 +37,8 @@
     "typescript": "^5.4.5"
   },
   "build": {
-    "appId": "dev.autoreach.worker",
-    "productName": "AutoReach Worker",
+    "appId": "app.creativeleads.worker",
+    "productName": "Creative Leads Worker",
     "directories": { "output": "release" },
     "files": [
       "dist/**/*",
@@ -49,6 +49,6 @@
     "mac":   { "target": "dmg",      "icon": "assets/icon.icns", "hardenedRuntime": true },
     "linux": { "target": "AppImage", "icon": "assets/icon.png" },
     "publish": { "provider": "github", "releaseType": "release" },
-    "extraMetadata": { "apiBaseUrl": "https://api.autoreach.dev" }
+    "extraMetadata": { "apiBaseUrl": "https://api.creativeleads.app" }
   }
 }

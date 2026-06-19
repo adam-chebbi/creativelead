@@ -6,11 +6,11 @@ import Link from 'next/link';
 
 export default function SignupPage() {
   const router = useRouter();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [name, setName]         = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,12 +27,13 @@ export default function SignupPage() {
 
   return (
     <div className="p-8 rounded-2xl border" style={{ background: '#0d1a1a', borderColor: '#1e3232' }}>
-      <h1 className="text-2xl font-bold text-white mb-2">Create your account</h1>
+      <h1 className="text-2xl font-bold text-white mb-1">Create your account</h1>
       <p className="text-sm text-[#6a9090] mb-6">Free forever. No credit card required.</p>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm text-[#6a9090] mb-1">Name</label>
           <input type="text" value={name} onChange={e => setName(e.target.value)}
+            placeholder="Your name"
             className="w-full px-4 py-3 rounded-lg text-white text-sm outline-none focus:ring-1 focus:ring-[#4ecdc4]"
             style={{ background: '#111c1c', border: '1px solid #1e3232' }} />
         </div>
@@ -44,7 +45,8 @@ export default function SignupPage() {
         </div>
         <div>
           <label className="block text-sm text-[#6a9090] mb-1">Password</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8}
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+            required minLength={8} placeholder="Min. 8 characters"
             className="w-full px-4 py-3 rounded-lg text-white text-sm outline-none focus:ring-1 focus:ring-[#4ecdc4]"
             style={{ background: '#111c1c', border: '1px solid #1e3232' }} />
         </div>
@@ -63,15 +65,16 @@ export default function SignupPage() {
       <div className="grid grid-cols-2 gap-3">
         <button onClick={() => signIn('google', { callbackUrl: '/download' })}
           className="py-3 rounded-lg text-sm font-medium text-white border border-[#1e3232] hover:border-[#2a4444] transition-colors">
-          &#127758; Google
+          🌎 Google
         </button>
         <button onClick={() => signIn('github', { callbackUrl: '/download' })}
           className="py-3 rounded-lg text-sm font-medium text-white border border-[#1e3232] hover:border-[#2a4444] transition-colors">
-          &#128025; GitHub
+          🐙 GitHub
         </button>
       </div>
       <p className="text-center text-sm text-[#6a9090] mt-6">
-        Already have an account? <Link href="/auth/login" className="text-[#4ecdc4] hover:underline">Sign in</Link>
+        Already have an account?{' '}
+        <Link href="/auth/login" className="text-[#4ecdc4] hover:underline">Sign in</Link>
       </p>
     </div>
   );

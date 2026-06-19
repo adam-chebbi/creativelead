@@ -16,9 +16,9 @@ export default function ConnectState() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[500px] px-8">
       <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mb-6" style={{ background: '#162424' }}>🔗</div>
-      <h1 className="text-xl font-bold text-white mb-2">Connect to Dashboard</h1>
+      <h1 className="text-xl font-bold text-white mb-2">Connect to Creative Leads</h1>
       <p className="text-sm text-center mb-8" style={{ color: '#6a9090' }}>
-        Paste your worker token from the dashboard download page.
+        Paste your worker token from the Creative Leads dashboard download page.
       </p>
 
       <div className="w-full max-w-sm space-y-4">
@@ -41,7 +41,7 @@ export default function ConnectState() {
         <button
           onClick={() => window.autoreach.openDashboard()}
           className="w-full py-2 text-sm" style={{ color: '#6a9090' }}>
-          Open dashboard to get your token ↗
+          Open Creative Leads dashboard to get your token ↗
         </button>
       </div>
     </div>
