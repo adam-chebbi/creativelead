@@ -29,17 +29,16 @@ export const authOptions: NextAuthOptions = {
       },
     }),
     GoogleProvider({
-      clientId:     process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      clientId:     process.env.GOOGLE_CLIENT_ID  ?? '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
     }),
     GitHubProvider({
-      clientId:     process.env.GITHUB_CLIENT_ID!,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+      clientId:     process.env.GITHUB_CLIENT_ID  ?? '',
+      clientSecret: process.env.GITHUB_CLIENT_SECRET ?? '',
     }),
   ],
   callbacks: {
     async signIn({ user, account }) {
-      // OAuth sign-in: upsert user with workerToken
       if (account && account.provider !== 'credentials') {
         const existing = await prisma.user.findUnique({ where: { email: user.email! } });
         if (!existing) {
@@ -61,16 +60,18 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email!;
         token.name  = user.name ?? undefined;
       }
-      // Sign a token the API bridge can verify
-      token.accessToken = jwt.sign(
-        { sub: token.sub, email: token.email },
-        process.env.NEXTAUTH_SECRET!,
-        { expiresIn: '7d' }
-      );
+      // Only sign once — reuse on subsequent refreshes to avoid token churn
+      if (!token.accessToken) {
+        token.accessToken = jwt.sign(
+          { sub: token.sub, email: token.email },
+          process.env.NEXTAUTH_SECRET!,
+          { expiresIn: '7d' }
+        );
+      }
       return token;
     },
     async session({ session, token }) {
-      session.user.id          = token.sub as string;
+      session.user.id = token.sub as string;
       (session as any).accessToken = token.accessToken as string;
       return session;
     },
