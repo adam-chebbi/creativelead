@@ -6,10 +6,10 @@ import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,7 +22,8 @@ export default function LoginPage() {
 
   return (
     <div className="p-8 rounded-2xl border" style={{ background: '#0d1a1a', borderColor: '#1e3232' }}>
-      <h1 className="text-2xl font-bold text-white mb-6">Welcome back</h1>
+      <h1 className="text-2xl font-bold text-white mb-1">Welcome back</h1>
+      <p className="text-sm text-[#6a9090] mb-6">Sign in to your Creative Leads account</p>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm text-[#6a9090] mb-1">Email</label>
@@ -51,15 +52,16 @@ export default function LoginPage() {
       <div className="grid grid-cols-2 gap-3">
         <button onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
           className="py-3 rounded-lg text-sm font-medium text-white border border-[#1e3232] hover:border-[#2a4444] transition-colors">
-          &#127758; Google
+          🌎 Google
         </button>
         <button onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
           className="py-3 rounded-lg text-sm font-medium text-white border border-[#1e3232] hover:border-[#2a4444] transition-colors">
-          &#128025; GitHub
+          🐙 GitHub
         </button>
       </div>
       <p className="text-center text-sm text-[#6a9090] mt-6">
-        No account? <Link href="/auth/signup" className="text-[#4ecdc4] hover:underline">Sign up free</Link>
+        No account?{' '}
+        <Link href="/auth/signup" className="text-[#4ecdc4] hover:underline">Sign up free</Link>
       </p>
     </div>
   );

@@ -88,7 +88,7 @@ async function main() {
     console.log('[DB] Connected to PostgreSQL via Prisma');
 
     app.listen(PORT, () => {
-      console.log(`[API] AutoReach V2 API Bridge running on port ${PORT}`);
+      console.log(`[API] Creative Leads API Bridge running on port ${PORT}`);
       console.log(`[API] Environment: ${process.env.NODE_ENV || 'development'}`);
     });
 

@@ -13,9 +13,9 @@ function detectOS(): 'windows' | 'macos' | 'linux' {
 }
 
 const DOWNLOADS = [
-  { os: 'windows', label: 'Windows', ext: '.exe', icon: '🪟', size: '~85 MB' },
-  { os: 'macos',   label: 'macOS',   ext: '.dmg', icon: '🍎', size: '~90 MB' },
-  { os: 'linux',   label: 'Linux',   ext: '.AppImage', icon: '🐧', size: '~80 MB' },
+  { os: 'windows', label: 'Windows', ext: '.exe',      icon: '🪟', size: '~85 MB', filename: 'CreativeLeads-Worker-Setup.exe' },
+  { os: 'macos',   label: 'macOS',   ext: '.dmg',      icon: '🍎', size: '~90 MB', filename: 'CreativeLeads-Worker.dmg' },
+  { os: 'linux',   label: 'Linux',   ext: '.AppImage', icon: '🐧', size: '~80 MB', filename: 'CreativeLeads-Worker.AppImage' },
 ];
 
 export default function DownloadPage() {
@@ -37,8 +37,8 @@ export default function DownloadPage() {
 
   return (
     <div className="p-8 max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold text-white mb-2">Download Worker</h1>
-      <p className="text-[#6a9090] mb-10">Install the desktop worker on your machine to start collecting leads.</p>
+      <h1 className="text-3xl font-bold text-white mb-2">Download Creative Leads Worker</h1>
+      <p className="text-[#6a9090] mb-10">Install the Creative Leads Worker on your machine to start collecting leads automatically.</p>
 
       {/* Download buttons */}
       <div className="grid md:grid-cols-3 gap-4 mb-10">

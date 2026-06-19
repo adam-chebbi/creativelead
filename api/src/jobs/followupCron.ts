@@ -12,7 +12,7 @@ import { prisma } from '../lib/prisma';
  */
 export function startFollowupCron(): void {
   cron.schedule('0 * * * *', async () => {
-    console.log('[CRON] Follow-up job started at', new Date().toISOString());
+    console.log('[Creative Leads CRON] Follow-up job started at', new Date().toISOString());
     try { await processFollowups(); }
     catch (err) { console.error('[CRON] Follow-up job error:', err); }
   });
