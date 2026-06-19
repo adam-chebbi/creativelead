@@ -1,0 +1,247 @@
+// AutoReach V2 — Prisma Schema
+// Database: PostgreSQL via Supabase
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────────────────────────
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String?  @map("password_hash")
+  name         String?
+  avatarUrl    String?  @map("avatar_url")
+  workerToken  String   @unique @map("worker_token")
+  plan         String   @default("free")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  settings         UserSettings?
+  businesses       Business[]
+  sentEmails       SentEmail[]
+  followupLogs     FollowupLog[]
+  scrapingSessions ScrapingSession[]
+  workerSessions   WorkerSession[]
+  scrapingJobs     ScrapingJob[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────
+// USER SETTINGS
+// ─────────────────────────────────────────────────────────────
+model UserSettings {
+  id     String @id @default(uuid())
+  userId String @unique @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  emailTemplate         String?  @map("email_template")
+  followupStep3Enabled  Boolean  @default(true)  @map("followup_step3_enabled")
+  followupStep7Enabled  Boolean  @default(true)  @map("followup_step7_enabled")
+  followupStep14Enabled Boolean  @default(true)  @map("followup_step14_enabled")
+  followupStep3Days     Int      @default(3)      @map("followup_step3_days")
+  followupStep7Days     Int      @default(7)      @map("followup_step7_days")
+  followupStep14Days    Int      @default(14)     @map("followup_step14_days")
+  scrollDelayMin        Int      @default(800)    @map("scroll_delay_min")
+  scrollDelayMax        Int      @default(1800)   @map("scroll_delay_max")
+  defaultLanguage       String   @default("english") @map("default_language")
+  resendApiKey          String?  @map("resend_api_key")
+  resendFromEmail       String?  @map("resend_from_email")
+  groqApiKey            String?  @map("groq_api_key")
+
+  @@map("user_settings")
+}
+
+// ─────────────────────────────────────────────────────────────
+// BUSINESS (Lead)
+// ─────────────────────────────────────────────────────────────
+model Business {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name          String
+  address       String   @default("")
+  phone         String   @default("")
+  website       String   @default("")
+  email         String   @default("")
+  googleMapsUrl String?  @map("google_maps_url")
+  rating        Decimal? @db.Decimal(3, 1)
+  reviewCount   Int?     @map("review_count")
+  category      String   @default("")
+  city          String   @default("")
+  businessType  String   @default("") @map("business_type")
+  latitude      Decimal? @db.Decimal(10, 7)
+  longitude     Decimal? @db.Decimal(10, 7)
+  plusCode      String?  @map("plus_code")
+  photoCount    Int?     @map("photo_count")
+  openingHours  Json?    @map("opening_hours")
+  attributes    Json?
+  popularTimes  Json?    @map("popular_times")
+  stage         String   @default("New")
+  notes         String?  @default("")
+  unsubscribed  Boolean  @default(false)
+  sessionId     String?  @map("session_id")
+  session       ScrapingSession? @relation(fields: [sessionId], references: [id])
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  reviews      Review[]
+  sentEmails   SentEmail[]
+  followupLogs FollowupLog[]
+
+  @@unique([userId, googleMapsUrl])
+  @@index([userId])
+  @@index([userId, stage])
+  @@index([userId, city])
+  @@index([userId, createdAt])
+  @@map("businesses")
+}
+
+// ─────────────────────────────────────────────────────────────
+// REVIEW
+// ─────────────────────────────────────────────────────────────
+model Review {
+  id             String   @id @default(uuid())
+  businessId     String   @map("business_id")
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  authorName     String   @map("author_name")
+  authorImageUrl String?  @map("author_image_url")
+  rating         Int?
+  text           String?  @default("")
+  publishedAt    String?  @map("published_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([businessId])
+  @@map("reviews")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SCRAPING SESSION
+// ─────────────────────────────────────────────────────────────
+model ScrapingSession {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  city             String
+  businessType     String    @map("business_type")
+  maxResults       Int       @default(200) @map("max_results")
+  scrapeReviews    Boolean   @default(true) @map("scrape_reviews")
+  leadsCollected   Int       @default(0) @map("leads_collected")
+  reviewsCollected Int       @default(0) @map("reviews_collected")
+  status           String    @default("running")
+  startedAt        DateTime  @default(now()) @map("started_at")
+  endedAt          DateTime? @map("ended_at")
+  endReason        String?   @map("end_reason")
+  workerVersion    String?   @map("worker_version")
+
+  businesses Business[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("scraping_sessions")
+}
+
+// ─────────────────────────────────────────────────────────────
+// WORKER SESSION
+// ─────────────────────────────────────────────────────────────
+model WorkerSession {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  machineName   String   @map("machine_name")
+  platform      String
+  workerVersion String   @map("worker_version")
+  connectedAt   DateTime @default(now()) @map("connected_at")
+  lastPing      DateTime @default(now()) @map("last_ping")
+  status        String   @default("online")
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("worker_sessions")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SENT EMAIL
+// ─────────────────────────────────────────────────────────────
+model SentEmail {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId   String?   @map("business_id")
+  business     Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  businessName String    @map("business_name")
+  email        String
+  subject      String    @default("")
+  body         String    @default("")
+  dateSent     DateTime  @default(now()) @map("date_sent")
+  language     String    @default("english")
+  status       String    @default("sent")
+  fromEmail    String    @default("") @map("from_email")
+
+  @@index([userId])
+  @@index([userId, dateSent])
+  @@map("sent_emails")
+}
+
+// ─────────────────────────────────────────────────────────────
+// FOLLOWUP LOG
+// ─────────────────────────────────────────────────────────────
+model FollowupLog {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId       String?   @map("business_id")
+  business         Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  businessName     String    @map("business_name")
+  email            String
+  originalDateSent DateTime  @map("original_date_sent")
+  followupStep     Int       @map("followup_step")
+  dateSent         DateTime  @default(now()) @map("date_sent")
+  subject          String    @default("")
+  body             String    @default("")
+  language         String    @default("english")
+  status           String    @default("pending")
+  scheduledFor     DateTime  @map("scheduled_for")
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, scheduledFor])
+  @@map("followup_logs")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SCRAPING JOB
+// ─────────────────────────────────────────────────────────────
+model ScrapingJob {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  city          String
+  businessType  String    @map("business_type")
+  maxResults    Int       @default(200) @map("max_results")
+  scrapeReviews Boolean   @default(true) @map("scrape_reviews")
+  status        String    @default("pending")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  startedAt     DateTime? @map("started_at")
+  completedAt   DateTime? @map("completed_at")
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("scraping_jobs")
+}
