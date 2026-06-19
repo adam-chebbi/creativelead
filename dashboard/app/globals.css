@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 3%;
+    --foreground: 180 20% 88%;
+    --card: 180 30% 8%;
+    --card-foreground: 180 20% 88%;
+    --popover: 180 30% 8%;
+    --popover-foreground: 180 20% 88%;
+    --primary: 177 55% 60%;
+    --primary-foreground: 180 30% 5%;
+    --secondary: 180 20% 14%;
+    --secondary-foreground: 180 20% 88%;
+    --muted: 180 20% 14%;
+    --muted-foreground: 180 15% 50%;
+    --accent: 180 20% 14%;
+    --accent-foreground: 180 20% 88%;
+    --destructive: 0 62% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 180 20% 16%;
+    --input: 180 20% 14%;
+    --ring: 177 55% 60%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    background-color: #080f0f;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0a1414; }
+::-webkit-scrollbar-thumb { background: #1e3232; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #2a4444; }
+
+/* Realtime highlight animation */
+@keyframes row-highlight {
+  0%   { background-color: rgba(78,205,196,0.18); }
+  100% { background-color: transparent; }
+}
+.animate-row-highlight { animation: row-highlight 2s ease-out forwards; }
