@@ -17,82 +17,43 @@ User signs up on dashboard (Next.js)
                                                               └─> Detail scraping: visits each URL
                                                                     └─> Reviews: navigates Reviews tab,
                                                                           sorts Newest, scrolls 50 reviews
-                                                                              └─> Upload lead → get DB id
-                                                                                    └─> Upload reviews by id
-                                                                                          └─> Realtime broadcast
-                                                                                                └─> Dashboard live
+                                                                              └─> POST /api/worker/leads
+                                                                                    └─> GET /api/worker/leads/find
+                                                                                          └─> POST /api/worker/lead/:id/reviews
+                                                                                                └─> Supabase Realtime broadcast
+                                                                                                      └─> Dashboard updates live
 ```
 
 ---
 
-## Issues Found & Fixed
+## All Issues Found & Fixed (17 total)
 
-### CRITICAL — Scraper
+### Batch 1 — Original audit
 
-**[FIXED] Issue 1: Wrong browser launched**
-- Was: `chromium.launchPersistentContext` with no `executablePath` always launched
-  Playwright's bundled Chromium, NOT the user's real browser.
-- Fix: Added `worker/src/main/scraper/browser.ts` — detects Chrome/Edge/Brave
-  executable path cross-platform (Win/Mac/Linux). Passes `executablePath` to
-  `launchPersistentContext`. Falls back to bundled Chromium only if none found.
-- Why it matters: The "watch it work" feature requires the user's OWN browser
-  to open. This is the core product differentiator.
+| # | Severity | File | Issue | Fix |
+|---|---|---|---|---|
+| 1 | 🔴 Critical | `engine.ts` | Wrong browser — always Playwright bundled Chromium, not user's real browser | Added `browser.ts` to detect Chrome/Edge/Brave path cross-platform |
+| 2 | 🔴 Critical | `engine.ts` | Reviews silently dropped — no DB ID for `/lead/:id/reviews` endpoint | Upload lead first, then `GET /api/worker/leads/find` to get ID |
+| 3 | 🔴 Critical | `engine.ts` | `reviewsCollected` always 0 in `session/end` | Class-level counter tracked properly |
+| 4 | 🔴 Critical | `engine.ts` | `navigator.webdriver` exposed — Google detects automation | `addInitScript` on context + `--disable-blink-features=AutomationControlled` |
+| 5 | 🟠 High | `search.ts` | Results panel selector `[role=feed]` too fragile | 4-selector fallback chain |
+| 6 | 🟠 High | `reviews.ts` | Review dedup by author name — same name = skip | Dedup by DOM position index |
+| 7 | 🟠 High | `engine.ts` | `Browser` type instead of `BrowserContext` — TypeScript crash | Fixed type |
+| 8 | 🟠 High | `package.json` | `electron-log` missing — startup crash | Added to dependencies |
+| 9 | 🟡 Medium | `package.json` | `styles.css` missing from electron-builder files | Added to `build.files` |
+| 10 | 🟡 Medium | `options.ts` | NextAuth JWT re-signed every 30s — API rejects mid-session | Only sign on initial login |
 
-**[FIXED] Issue 2: Reviews never actually uploaded**
-- Was: `engine.ts` uploaded the lead, then tried to upload reviews but had no
-  business DB ID to call `POST /api/worker/lead/:id/reviews`. Reviews were silently dropped.
-- Fix: After uploading a lead, engine queries `GET /api/dashboard/leads?search=name`
-  to retrieve the DB ID by matching `googleMapsUrl`, then calls the reviews endpoint.
-  `reviewsCollected` counter now tracked and reported in `session/end`.
+### Batch 2 — Deep audit
 
-**[FIXED] Issue 3: `reviewsCollected` always 0 in session/end**
-- Was: `engine.emit('complete', { leadsCollected, reviewsCollected: 0 })` hardcoded 0.
-- Fix: Class-level `this.reviewsCollected` counter incremented per business.
-
-**[FIXED] Issue 4: `navigator.webdriver` fingerprint exposed**
-- Was: Playwright sets `navigator.webdriver = true` by default, which Google detects.
-- Fix: Added `page.addInitScript` to override `navigator.webdriver` to `undefined`.
-  Also added `--disable-blink-features=AutomationControlled` launch arg.
-
-**[FIXED] Issue 5: Results panel selector too fragile**
-- Was: `[role="feed"]` only — Google Maps changes class names frequently.
-- Fix: `search.ts` now uses a prioritised fallback chain:
-  `[role="feed"]` → `div[aria-label*="Results"]` → `.m6QErb[aria-label]` → `.m6QErb`
-
-**[FIXED] Issue 6: Review deduplication by author name**
-- Was: `seenAuthors.add(authorName)` — two people with the same name caused the
-  second review to be skipped.
-- Fix: Dedup by DOM position index (`r.idx >= reviews.length`). Collects exactly
-  the first 50 reviews in order.
-
-**[FIXED] Issue 7: `Browser` type used instead of `BrowserContext`**
-- Was: `private browser: Browser` — `launchPersistentContext` returns a
-  `BrowserContext`, not a `Browser`. TypeScript error at runtime.
-- Fix: Changed to `private context: BrowserContext`.
-
----
-
-### CRITICAL — Dependencies
-
-**[FIXED] Issue 8: `electron-log` missing from package.json**
-- Was: `updater.ts` imports `electron-log` but it was not in `dependencies`.
-  Worker would crash on startup with `Cannot find module 'electron-log'`.
-- Fix: Added `"electron-log": "^5.1.5"` to `worker/package.json`.
-
-**[FIXED] Issue 9: `build.files` missing renderer styles**
-- Was: `src/renderer/styles.css` not included in electron-builder files array.
-  Renderer would load unstyled in production builds.
-- Fix: Added `src/renderer/styles.css` to `build.files`.
-
----
-
-### IMPORTANT — Auth
-
-**[FIXED] Issue 10: NextAuth JWT re-signed on every session refresh**
-- Was: `jwt()` callback called `jwt.sign()` unconditionally on every token
-  refresh, generating a new `accessToken` every 30s. API bridge rejected mid-session.
-- Fix: Only sign `accessToken` when `token.accessToken` is not already set
-  (i.e., only on initial login).
+| # | Severity | File | Issue | Fix |
+|---|---|---|---|---|
+| 11 | 🔴 Critical | `engine.ts` | `GET /api/dashboard/leads` used to find lead ID — requires dashboard JWT, worker only has worker token — would 401 | Added `GET /api/worker/leads/find?googleMapsUrl=` endpoint with worker auth |
+| 12 | 🔴 Critical | `index.ts` | `preload.js` path wrong: `path.join(__dirname, '..', 'preload.js')` — preload compiles to `dist/main/preload.js` (same dir) | Fixed to `path.join(__dirname, 'preload.js')` |
+| 13 | 🔴 Critical | `index.ts` | `sendToRenderer` called before window finishes loading — race condition on startup | Added `did-finish-load` guard via `sendToRenderer()` helper |
+| 14 | 🟠 High | `client.ts` | `store.get('apiBaseUrl')` called at module load time before `electron-store` is initialized | Changed to lazy singleton via `getApiClient()` + Proxy |
+| 15 | 🟠 High | `detail.ts` | `humanClick` called with multi-selector string — not a valid single CSS selector, throws | Changed to loop over selectors, find first matching element, call `.click()` directly |
+| 16 | 🟠 High | `engine.ts` | `addInitScript` called on `page` only — new pages opened by Maps (popups) would still expose `webdriver` | Changed to `context.addInitScript()` so all pages in the context are patched |
+| 17 | 🟡 Medium | `index.ts` | `stop-scraping` IPC didn't track `currentSessionId` — session never ended if user clicked Stop | Added `currentSessionId` class variable, used in `stop-scraping` handler |
 
 ---
 
@@ -157,14 +118,15 @@ Only `apiBaseUrl` is baked in at build time via `electron-builder.extraMetadata`
 
 ## Human-Like Behavior Implemented
 
-- `humanType`: per-character delays 60-180ms, 15% typo+backspace rate
-- `humanClick`: random point inside bounding box (not center)
-- `humanScroll`: step-based 80-200px, 20% reversal, 100-400ms between steps
-- `humanWait`: random range waits throughout all operations
-- `humanMouseMove`: curved path with 3-5 waypoints
-- `slowMo`: 40-80ms random per Playwright action
+- `humanType` — per-character delays 60-180ms, 15% typo+backspace rate
+- `humanClick` — random point inside bounding box (not center)
+- `humanScroll` — step-based 80-200px, 20% reversal, 100-400ms between steps
+- `humanWait` — random range waits throughout all operations
+- `humanMouseMove` — curved path with 3-5 waypoints
+- `slowMo` — 40-80ms random per Playwright action
 - Warm-up: google.com → optional random browse/search → Maps
 - Persistent browser profile: looks like returning user, not fresh session
-- `navigator.webdriver` removed from page context
+- `navigator.webdriver` removed from ALL pages in context (not just first page)
+- `navigator.plugins` spoofed to non-empty array
 - `--disable-blink-features=AutomationControlled` launch flag
 - 1.2-2.5s wait between each business detail page visit
