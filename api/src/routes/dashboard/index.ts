@@ -6,6 +6,7 @@ import { pipelineRouter } from './pipeline';
 import { outreachRouter } from './outreach';
 import { settingsRouter } from './settings';
 import { sessionsRouter } from './sessions';
+import { streamRouter }   from './stream';
 
 export const dashboardRouter = Router();
 
@@ -18,3 +19,4 @@ dashboardRouter.use('/pipeline', pipelineRouter);
 dashboardRouter.use('/outreach', outreachRouter);
 dashboardRouter.use('/settings', settingsRouter);
 dashboardRouter.use('/sessions', sessionsRouter);
+dashboardRouter.use('/stream',   streamRouter);

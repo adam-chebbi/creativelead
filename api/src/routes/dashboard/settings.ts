@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { prisma } from '../../lib/prisma';
+import { encrypt, decrypt } from '../../lib/encryption';
 
 export const settingsRouter = Router();
 
@@ -19,12 +20,29 @@ const UpdateSchema = z.object({
   resendApiKey:          z.string().max(200).optional(),
   resendFromEmail:       z.string().email().max(200).optional(),
   groqApiKey:            z.string().max(200).optional(),
+  googleMapsApiKey:      z.string().max(200).optional(),
+  senderName:            z.string().max(200).optional(),
 });
+
+function maskKey(key: string | null | undefined): string | null {
+  if (!key) return null;
+  if (key.length <= 4) return '***' + key;
+  return '...' + key.slice(-4);
+}
 
 /** GET /api/dashboard/settings — returns settings (API keys masked) */
 settingsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const s = await prisma.userSettings.findUnique({ where: { userId: req.userId } });
+    
+    let resendKeyDecrypted = null;
+    let groqKeyDecrypted = null;
+    let googleMapsKeyDecrypted = null;
+    
+    try { if (s?.resendApiKeyEncrypted) resendKeyDecrypted = decrypt(s.resendApiKeyEncrypted); } catch (e) {}
+    try { if (s?.groqApiKeyEncrypted) groqKeyDecrypted = decrypt(s.groqApiKeyEncrypted); } catch (e) {}
+    try { if (s?.googleMapsApiKeyEncrypted) googleMapsKeyDecrypted = decrypt(s.googleMapsApiKeyEncrypted); } catch (e) {}
+
     res.json({
       emailTemplate:         s?.emailTemplate         ?? null,
       followupStep3Enabled:  s?.followupStep3Enabled  ?? true,
@@ -36,9 +54,14 @@ settingsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
       scrollDelayMin:        s?.scrollDelayMin        ?? 800,
       scrollDelayMax:        s?.scrollDelayMax        ?? 1800,
       defaultLanguage:       s?.defaultLanguage       ?? 'english',
-      hasResendKey:          !!s?.resendApiKey,
-      hasGroqKey:            !!s?.groqApiKey,
+      hasResendKey:          !!s?.resendApiKeyEncrypted,
+      hasGroqKey:            !!s?.groqApiKeyEncrypted,
+      hasGoogleMapsKey:      !!s?.googleMapsApiKeyEncrypted,
+      resendKeyMasked:       maskKey(resendKeyDecrypted),
+      groqKeyMasked:         maskKey(groqKeyDecrypted),
+      googleMapsKeyMasked:   maskKey(googleMapsKeyDecrypted),
       resendFromEmail:       s?.resendFromEmail       ?? null,
+      senderName:            s?.senderName            ?? null,
     });
   } catch (err) {
     console.error('[settings GET]', err);
@@ -51,10 +74,17 @@ settingsRouter.patch('/', async (req: Request, res: Response): Promise<void> => 
   const parsed = UpdateSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid body', details: parsed.error.flatten() }); return; }
   try {
+    const { resendApiKey, groqApiKey, googleMapsApiKey, ...rest } = parsed.data;
+    const dataToSave: any = { ...rest };
+    
+    if (resendApiKey) dataToSave.resendApiKeyEncrypted = encrypt(resendApiKey);
+    if (groqApiKey) dataToSave.groqApiKeyEncrypted = encrypt(groqApiKey);
+    if (googleMapsApiKey) dataToSave.googleMapsApiKeyEncrypted = encrypt(googleMapsApiKey);
+
     await prisma.userSettings.upsert({
       where:  { userId: req.userId },
-      create: { userId: req.userId, ...parsed.data },
-      update: parsed.data,
+      create: { userId: req.userId, ...dataToSave },
+      update: dataToSave,
     });
     res.json({ ok: true });
   } catch (err) {

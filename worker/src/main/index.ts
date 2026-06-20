@@ -11,29 +11,28 @@ let currentSessionId: string | null = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width:     900,
-    height:    680,
+    width:     1200,
+    height:    800,
     minWidth:  480,
     minHeight: 500,
     backgroundColor: '#111c1c',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
-      // preload lives in the same dist/main/ directory as index.js
       preload:          path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration:  false,
-      sandbox:          false, // required for electron-store in preload
+      sandbox:          false,
     },
   });
 
+  const dashboardUrl = store.get('apiBaseUrl')?.replace('/api', '') || 'https://leads.creativecomet.tn';
+
   if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:3000');
+    mainWindow.loadURL('http://localhost:3040');
     mainWindow.webContents.openDevTools();
   } else {
-    // In production: dist/main/index.js -> ../../src/renderer/index.html
-    mainWindow.loadFile(
-      path.join(__dirname, '..', '..', 'src', 'renderer', 'index.html')
-    );
+    // In production: load the live Next.js web application (The Figma Model)
+    mainWindow.loadURL(dashboardUrl);
   }
 
   setupUpdater(mainWindow);
@@ -53,15 +52,60 @@ function sendToRenderer(channel: string, data?: unknown) {
   }
 }
 
-app.whenReady().then(async () => {
-  createWindow();
+// ── Custom Protocol Handler for Auth Pairing ──
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('autoreach-worker', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('autoreach-worker');
+}
 
-  // Verify stored token after window is ready
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+    const url = commandLine.pop();
+    handleProtocolUrl(url);
+  });
+}
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleProtocolUrl(url);
+});
+
+async function handleProtocolUrl(urlStr?: string) {
+  if (!urlStr || !urlStr.startsWith('autoreach-worker://')) return;
+  try {
+    const url = new URL(urlStr);
+    if (url.hostname === 'auth') {
+      const token = url.searchParams.get('token');
+      if (token) {
+        store.set('workerToken', token);
+        await verifyAndPing();
+      }
+    }
+  } catch (e) {
+    console.error('Failed to parse protocol url:', e);
+  }
+}
+
+async function verifyAndPing() {
   const token = store.get('workerToken');
   if (token) {
     try {
       await apiClient.post('/api/worker/ping');
       sendToRenderer('auth-state', { state: 'idle' });
+      // Reload dashboard so it picks up the active worker status
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.reload();
+      }
     } catch {
       store.set('workerToken', '');
       sendToRenderer('auth-state', { state: 'connect' });
@@ -69,6 +113,11 @@ app.whenReady().then(async () => {
   } else {
     sendToRenderer('auth-state', { state: 'connect' });
   }
+}
+
+app.whenReady().then(async () => {
+  createWindow();
+  await verifyAndPing();
 
   // Heartbeat every 30s
   setInterval(async () => {

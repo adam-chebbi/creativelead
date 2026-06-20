@@ -13,14 +13,20 @@ export async function dashboardAuth(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  const authHeader = req.headers.authorization;
+  let token = '';
 
-  if (!authHeader?.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Missing Authorization header' });
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.slice(7).trim();
+  } else if (req.query.token && typeof req.query.token === 'string') {
+    token = req.query.token;
+  }
+
+  if (!token) {
+    res.status(401).json({ error: 'Missing Authorization header or token query param' });
     return;
   }
 
-  const token = authHeader.slice(7).trim();
   const payload = verifyDashboardJwt(token);
 
   if (!payload?.sub) {

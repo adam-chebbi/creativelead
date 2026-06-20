@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
-import { broadcastToUser } from '../../lib/supabase';
+import { emitToUser } from '../dashboard/stream';
 
 export const sessionRouter = Router();
 
@@ -39,7 +39,7 @@ sessionRouter.post('/start', async (req: Request, res: Response): Promise<void> 
       data: { userId: req.userId, city, businessType, maxResults, scrapeReviews, status: 'running', workerVersion },
     });
 
-    await broadcastToUser(req.userId, 'session:started', {
+    emitToUser(req.userId, 'session:started', {
       sessionId: session.id, city, businessType, maxResults,
     });
 
@@ -78,7 +78,7 @@ sessionRouter.post('/end', async (req: Request, res: Response): Promise<void> =>
       data: { status: statusMap[endReason], leadsCollected, reviewsCollected, endReason, endedAt: new Date() },
     });
 
-    await broadcastToUser(req.userId, 'session:ended', {
+    emitToUser(req.userId, 'session:ended', {
       sessionId, leadsCollected, reviewsCollected, endReason,
     });
 

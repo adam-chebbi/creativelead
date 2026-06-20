@@ -1,11 +1,12 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, getSession } from 'next-auth/react';
 import { useQuery } from '@tanstack/react-query';
 import { getStats } from '@/lib/api';
-import { subscribeToUserChannel } from '@/lib/supabase';
 import { formatDateTime, timeAgo, stageColor } from '@/lib/utils';
 import type { DashboardStats, Lead } from '@/lib/types';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -32,26 +33,58 @@ export default function OverviewPage() {
 
   useEffect(() => {
     if (!userId) return;
-    setRealtimeConnected(true);
-    const unsub = subscribeToUserChannel(userId, (event, payload) => {
-      if (event === 'leads:new') {
-        const p = payload as { count: number; leads: Lead[] };
-        setActivity(prev => [{ time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), msg: `${p.count} new lead(s) collected` }, ...prev.slice(0, 49)]);
-        setNewRowIds(ids => { const s = new Set(ids); p.leads.forEach(l => s.add(l.id)); return s; });
-        setTimeout(() => setNewRowIds(new Set()), 2500);
-        refetch();
-      }
-      if (event === 'session:started') {
-        const p = payload as { city: string; businessType: string };
-        setActivity(prev => [{ time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), msg: `Scraping started — ${p.businessType} in ${p.city}` }, ...prev.slice(0, 49)]);
-      }
-      if (event === 'session:ended') {
-        const p = payload as { leadsCollected: number };
-        setActivity(prev => [{ time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), msg: `Session ended — ${p.leadsCollected} leads collected` }, ...prev.slice(0, 49)]);
-        refetch();
-      }
-    });
-    return () => { unsub(); setRealtimeConnected(false); };
+    
+    let mounted = true;
+    let eventSource: EventSource | null = null;
+
+    const connectStream = async () => {
+      const s = await getSession();
+      if (!s?.accessToken || !mounted) return;
+      
+      eventSource = new EventSource(`${API_URL}/api/dashboard/stream?token=${encodeURIComponent(s.accessToken as string)}`);
+      
+      eventSource.onopen = () => { if (mounted) setRealtimeConnected(true); };
+      
+      eventSource.addEventListener('leads:new', (e) => {
+        if (!mounted) return;
+        try {
+          const p = JSON.parse(e.data);
+          setActivity(prev => [{ time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), msg: `${p.count} new lead(s) collected` }, ...prev.slice(0, 49)]);
+          setNewRowIds(ids => { const s = new Set(ids); p.leads.forEach((l: any) => s.add(l.id)); return s; });
+          setTimeout(() => setNewRowIds(new Set()), 2500);
+          refetch();
+        } catch (err) {}
+      });
+
+      eventSource.addEventListener('session:started', (e) => {
+        if (!mounted) return;
+        try {
+          const p = JSON.parse(e.data);
+          setActivity(prev => [{ time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), msg: `Scraping started — ${p.businessType} in ${p.city}` }, ...prev.slice(0, 49)]);
+        } catch (err) {}
+      });
+
+      eventSource.addEventListener('session:ended', (e) => {
+        if (!mounted) return;
+        try {
+          const p = JSON.parse(e.data);
+          setActivity(prev => [{ time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), msg: `Session ended — ${p.leadsCollected} leads collected` }, ...prev.slice(0, 49)]);
+          refetch();
+        } catch (err) {}
+      });
+
+      eventSource.onerror = () => {
+        if (mounted) setRealtimeConnected(false);
+      };
+    };
+
+    connectStream();
+
+    return () => { 
+      mounted = false;
+      if (eventSource) eventSource.close(); 
+      setRealtimeConnected(false); 
+    };
   }, [userId, refetch]);
 
   const recentLeads = [...(liveLeads), ...(stats?.recentLeads ?? [])].slice(0, 10);

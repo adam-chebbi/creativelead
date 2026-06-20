@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 
 import { workerRouter } from './routes/worker';
 import { dashboardRouter } from './routes/dashboard';
+import { resendWebhookRouter } from './routes/webhooks/resend';
 import { startFollowupCron } from './jobs/followupCron';
 import { prisma } from './lib/prisma';
 
@@ -16,6 +17,10 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 // ── Security & Middleware ─────────────────────────────────────
 app.use(helmet());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// Webhooks must be mounted before express.json() to preserve the raw body Buffer for signature validation
+app.use('/api/webhooks/resend', express.raw({ type: 'application/json' }), resendWebhookRouter);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -86,6 +91,15 @@ async function main() {
   try {
     await prisma.$connect();
     console.log('[DB] Connected to PostgreSQL via Prisma');
+
+    // Reset any follow-ups that were stuck in processing due to a server restart
+    const resetCount = await prisma.followupLog.updateMany({
+      where: { status: 'processing' },
+      data: { status: 'pending' },
+    });
+    if (resetCount.count > 0) {
+      console.log(`[DB] Reset ${resetCount.count} stuck follow-up jobs to pending`);
+    }
 
     app.listen(PORT, () => {
       console.log(`[API] Creative Leads API Bridge running on port ${PORT}`);

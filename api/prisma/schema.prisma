@@ -1,5 +1,5 @@
 // AutoReach V2 — Prisma Schema
-// Database: PostgreSQL via Supabase
+// Database: PostgreSQL
 
 generator client {
   provider = "prisma-client-js"
@@ -12,19 +12,63 @@ datasource db {
 }
 
 // ─────────────────────────────────────────────────────────────
+// NEXTAUTH REQUIRED MODELS
+// ─────────────────────────────────────────────────────────────
+model Account {
+  id                 String  @id @default(uuid())
+  userId             String  @map("user_id")
+  type               String
+  provider           String
+  providerAccountId  String  @map("provider_account_id")
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─────────────────────────────────────────────────────────────
 // USER
 // ─────────────────────────────────────────────────────────────
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String?  @map("password_hash")
-  name         String?
-  avatarUrl    String?  @map("avatar_url")
-  workerToken  String   @unique @map("worker_token")
-  plan         String   @default("free")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  passwordHash  String?   @map("password_hash")
+  plan          String    @default("free")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
+  accounts         Account[]
+  sessions         Session[]
   settings         UserSettings?
   businesses       Business[]
   sentEmails       SentEmail[]
@@ -54,9 +98,14 @@ model UserSettings {
   scrollDelayMin        Int      @default(800)    @map("scroll_delay_min")
   scrollDelayMax        Int      @default(1800)   @map("scroll_delay_max")
   defaultLanguage       String   @default("english") @map("default_language")
-  resendApiKey          String?  @map("resend_api_key")
+  
+  // Encrypted keys
+  resendApiKeyEncrypted       String?  @map("resend_api_key_encrypted")
+  groqApiKeyEncrypted         String?  @map("groq_api_key_encrypted")
+  googleMapsApiKeyEncrypted   String?  @map("google_maps_api_key_encrypted")
+  
   resendFromEmail       String?  @map("resend_from_email")
-  groqApiKey            String?  @map("groq_api_key")
+  senderName            String?  @map("sender_name")
 
   @@map("user_settings")
 }
@@ -71,6 +120,7 @@ model Business {
 
   name          String
   address       String   @default("")
+  city          String   @default("")
   phone         String   @default("")
   website       String   @default("")
   email         String   @default("")
@@ -78,7 +128,6 @@ model Business {
   rating        Decimal? @db.Decimal(3, 1)
   reviewCount   Int?     @map("review_count")
   category      String   @default("")
-  city          String   @default("")
   businessType  String   @default("") @map("business_type")
   latitude      Decimal? @db.Decimal(10, 7)
   longitude     Decimal? @db.Decimal(10, 7)
@@ -90,8 +139,14 @@ model Business {
   stage         String   @default("New")
   notes         String?  @default("")
   unsubscribed  Boolean  @default(false)
+  
+  placeId       String?  @map("place_id") // Unique per user according to blueprint
+  scrapeJobId   String?  @map("scrape_job_id")
+  scrapeJob     ScrapingJob? @relation(fields: [scrapeJobId], references: [id])
+  
   sessionId     String?  @map("session_id")
   session       ScrapingSession? @relation(fields: [sessionId], references: [id])
+  
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -161,11 +216,14 @@ model WorkerSession {
   userId        String   @map("user_id")
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  machineName   String   @map("machine_name")
-  platform      String
-  workerVersion String   @map("worker_version")
-  connectedAt   DateTime @default(now()) @map("connected_at")
-  lastPing      DateTime @default(now()) @map("last_ping")
+  tokenHash     String   @map("token_hash") // Used for pairing
+  
+  machineName   String?  @map("machine_name")
+  platform      String?
+  workerVersion String?  @map("worker_version")
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  lastSeenAt    DateTime @default(now()) @map("last_seen_at")
   status        String   @default("online")
 
   @@index([userId])
@@ -184,16 +242,17 @@ model SentEmail {
   business     Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
   businessName String    @map("business_name")
-  email        String
+  toEmail      String    @map("to_email")
   subject      String    @default("")
   body         String    @default("")
-  dateSent     DateTime  @default(now()) @map("date_sent")
   language     String    @default("english")
   status       String    @default("sent")
-  fromEmail    String    @default("") @map("from_email")
+  templateId   String?   @map("template_id")
+  senderEmail  String    @default("") @map("sender_email")
+  sentAt       DateTime  @default(now()) @map("sent_at")
 
   @@index([userId])
-  @@index([userId, dateSent])
+  @@index([userId, sentAt])
   @@map("sent_emails")
 }
 
@@ -208,15 +267,15 @@ model FollowupLog {
   business         Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
   businessName     String    @map("business_name")
-  email            String
+  toEmail          String    @map("to_email")
   originalDateSent DateTime  @map("original_date_sent")
-  followupStep     Int       @map("followup_step")
-  dateSent         DateTime  @default(now()) @map("date_sent")
+  followupStep     Int       @map("followup_step") // 1/2/3
+  status           String    @default("pending") // pending/processing/sent/skipped/replied
+  scheduledFor     DateTime  @map("scheduled_for")
   subject          String    @default("")
   body             String    @default("")
   language         String    @default("english")
-  status           String    @default("pending")
-  scheduledFor     DateTime  @map("scheduled_for")
+  sentAt           DateTime? @map("sent_at")
 
   @@index([userId])
   @@index([userId, status])
@@ -236,10 +295,16 @@ model ScrapingJob {
   businessType  String    @map("business_type")
   maxResults    Int       @default(200) @map("max_results")
   scrapeReviews Boolean   @default(true) @map("scrape_reviews")
-  status        String    @default("pending")
+  status        String    @default("queued") // queued/running/paused/completed/cancelled
+  leadsCollected Int      @default(0) @map("leads_collected")
+  leadsTotal    Int       @default(0) @map("leads_total")
+  
   createdAt     DateTime  @default(now()) @map("created_at")
   startedAt     DateTime? @map("started_at")
   completedAt   DateTime? @map("completed_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  businesses    Business[]
 
   @@index([userId])
   @@index([userId, status])

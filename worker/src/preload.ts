@@ -1,13 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
-contextBridge.exposeInMainWorld('autoreach', {
+contextBridge.exposeInMainWorld('desktopAPI', {
   // Auth
   connectWorker:  (token: string)  => ipcRenderer.invoke('connect-worker', token),
   clearToken:     ()               => ipcRenderer.invoke('clear-token'),
   getConfig:      ()               => ipcRenderer.invoke('get-config'),
 
   // Scraping
-  startScraping:  (config: object) => ipcRenderer.invoke('start-scraping', config),
+  startScrape:    (config: object) => ipcRenderer.invoke('start-scraping', config),
   stopScraping:   (sessionId?: string) => ipcRenderer.invoke('stop-scraping', sessionId),
   pauseScraping:  ()               => ipcRenderer.invoke('pause-scraping'),
   resumeCaptcha:  ()               => ipcRenderer.invoke('resume-captcha'),

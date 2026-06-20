@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import Groq from 'groq-sdk';
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
+import { decrypt } from '../lib/encryption';
 
 /**
  * Follow-up Cron Job — runs every hour.
@@ -19,20 +20,31 @@ export function startFollowupCron(): void {
 }
 
 async function processFollowups(): Promise<void> {
+  // Atomically claim up to 100 pending follow-ups
+  const claimed = await prisma.$queryRaw<{ id: string }[]>`
+    UPDATE followup_logs 
+    SET status = 'processing' 
+    WHERE id IN (
+      SELECT id FROM followup_logs 
+      WHERE status = 'pending' AND scheduled_for <= NOW() 
+      LIMIT 100
+    )
+    RETURNING id;
+  `;
+
+  if (!claimed || claimed.length === 0) { console.log('[CRON] No follow-ups due.'); return; }
+  console.log(`[CRON] Processing ${claimed.length} follow-up(s)`);
+
   const due = await prisma.followupLog.findMany({
-    where: { status: 'pending', scheduledFor: { lte: new Date() } },
+    where: { id: { in: claimed.map(c => c.id) } },
     include: {
       user: { select: { id: true, settings: { select: {
-        groqApiKey: true, resendApiKey: true, resendFromEmail: true,
+        groqApiKeyEncrypted: true, resendApiKeyEncrypted: true, resendFromEmail: true,
         followupStep3Enabled: true, followupStep7Enabled: true, followupStep14Enabled: true,
       }}}},
       business: { select: { id: true, name: true, address: true, email: true, unsubscribed: true, stage: true } },
     },
-    take: 100,
   });
-
-  if (due.length === 0) { console.log('[CRON] No follow-ups due.'); return; }
-  console.log(`[CRON] Processing ${due.length} follow-up(s)`);
 
   let sent = 0, skipped = 0, failed = 0;
 
@@ -52,8 +64,8 @@ async function processFollowups(): Promise<void> {
         skipped++; continue;
       }
 
-      const groqKey  = s?.groqApiKey    || process.env.GROQ_API_KEY;
-      const resendKey = s?.resendApiKey  || process.env.RESEND_API_KEY;
+      const groqKey = s?.groqApiKeyEncrypted ? decrypt(s.groqApiKeyEncrypted) : process.env.GROQ_API_KEY;
+      const resendKey = s?.resendApiKeyEncrypted ? decrypt(s.resendApiKeyEncrypted) : process.env.RESEND_API_KEY;
       const fromEmail = s?.resendFromEmail || process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 
       if (!groqKey || !resendKey) { skipped++; continue; }

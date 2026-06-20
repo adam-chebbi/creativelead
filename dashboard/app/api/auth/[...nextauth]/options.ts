@@ -2,6 +2,7 @@ import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
 import GitHubProvider from 'next-auth/providers/github';
+import { PrismaAdapter } from '@auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
@@ -10,6 +11,7 @@ import jwt from 'jsonwebtoken';
 const prisma = new PrismaClient();
 
 export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma) as any,
   session: { strategy: 'jwt' },
   pages: { signIn: '/auth/login' },
   providers: [
@@ -38,23 +40,7 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async signIn({ user, account }) {
-      if (account && account.provider !== 'credentials') {
-        const existing = await prisma.user.findUnique({ where: { email: user.email! } });
-        if (!existing) {
-          await prisma.user.create({
-            data: {
-              email:       user.email!,
-              name:        user.name,
-              avatarUrl:   user.image,
-              workerToken: crypto.randomBytes(32).toString('hex'),
-            },
-          });
-        }
-      }
-      return true;
-    },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.sub   = user.id;
         token.email = user.email!;
@@ -71,7 +57,9 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      session.user.id = token.sub as string;
+      if (session.user && token.sub) {
+        session.user.id = token.sub as string;
+      }
       (session as any).accessToken = token.accessToken as string;
       return session;
     },

@@ -17,6 +17,10 @@ export function getApiClient(): AxiosInstance {
   _client.interceptors.request.use((config) => {
     const token = store.get('workerToken');
     if (token) config.headers.Authorization = `Bearer ${token}`;
+    
+    // Inject the worker secret to satisfy the API bridge requirements
+    config.headers['X-Worker-Token']    = process.env.WORKER_SECRET || 'dev_secret_key';
+    
     config.headers['X-Machine-Name']    = os.hostname();
     config.headers['X-Platform']        =
       process.platform === 'win32'  ? 'windows' :

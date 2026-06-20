@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { broadcastToUser } from '../../lib/supabase';
+import { emitToUser } from '../dashboard/stream';
 
 export const leadsRouter = Router();
 
@@ -26,6 +26,7 @@ const LeadSchema = z.object({
   attributes:    z.array(z.string()).optional().nullable(),
   popularTimes:  z.record(z.unknown()).optional().nullable(),
   sessionId:     z.string().uuid().optional().nullable(),
+  scrapeJobId:   z.string().uuid().optional().nullable(),
 });
 
 const BulkSchema = z.object({
@@ -34,9 +35,6 @@ const BulkSchema = z.object({
 
 /**
  * GET /api/worker/leads/find?googleMapsUrl=...
- *
- * Lets the scraping engine look up a lead's DB id by its Google Maps URL.
- * Uses worker token auth (not dashboard JWT) so the engine can call it directly.
  */
 leadsRouter.get('/find', async (req: Request, res: Response): Promise<void> => {
   const googleMapsUrl = req.query.googleMapsUrl as string;
@@ -62,10 +60,6 @@ leadsRouter.get('/find', async (req: Request, res: Response): Promise<void> => {
 
 /**
  * POST /api/worker/leads
- *
- * Bulk upsert leads from the desktop worker.
- * Deduplicates by (userId, googleMapsUrl).
- * Broadcasts realtime events to the dashboard after insert.
  */
 leadsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
   const parsed = BulkSchema.safeParse(req.body);
@@ -77,7 +71,7 @@ leadsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
   const { leads } = parsed.data;
   const userId = req.userId;
   let inserted = 0, updated = 0, skipped = 0;
-  const insertedLeads: Array<{ id: string; name: string; city: string }> = [];
+  const insertedLeads: any[] = [];
 
   for (const lead of leads) {
     try {
@@ -96,17 +90,11 @@ leadsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
         longitude:    lead.longitude != null ? new Prisma.Decimal(lead.longitude) : null,
         plusCode:     lead.plusCode  ?? null,
         photoCount:   lead.photoCount ?? null,
-        // Use Prisma.JsonNull for null JSON fields — avoids type errors
-        openingHours: lead.openingHours != null
-          ? (lead.openingHours as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-        attributes: lead.attributes != null
-          ? (lead.attributes as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-        popularTimes: lead.popularTimes != null
-          ? (lead.popularTimes as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
+        openingHours: lead.openingHours != null ? (lead.openingHours as Prisma.InputJsonValue) : Prisma.JsonNull,
+        attributes: lead.attributes != null ? (lead.attributes as Prisma.InputJsonValue) : Prisma.JsonNull,
+        popularTimes: lead.popularTimes != null ? (lead.popularTimes as Prisma.InputJsonValue) : Prisma.JsonNull,
         sessionId: lead.sessionId ?? null,
+        scrapeJobId: lead.scrapeJobId ?? null,
       };
 
       if (lead.googleMapsUrl) {
@@ -123,12 +111,12 @@ leadsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
             data: { userId, googleMapsUrl: lead.googleMapsUrl, ...commonData },
           });
           inserted++;
-          insertedLeads.push({ id: created.id, name: created.name, city: created.city });
+          insertedLeads.push(created);
         }
       } else {
         const created = await prisma.business.create({ data: { userId, ...commonData } });
         inserted++;
-        insertedLeads.push({ id: created.id, name: created.name, city: created.city });
+        insertedLeads.push(created);
       }
     } catch (err) {
       console.error(`[worker/leads] Failed to upsert "${lead.name}":`, err);
@@ -136,21 +124,47 @@ leadsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
     }
   }
 
-  // Update session lead count
-  const sessionId = leads.find((l) => l.sessionId)?.sessionId;
-  if (sessionId && inserted > 0) {
-    prisma.scrapingSession
-      .update({ where: { id: sessionId }, data: { leadsCollected: { increment: inserted } } })
+  const jobId = leads.find((l) => l.scrapeJobId)?.scrapeJobId;
+  if (jobId && inserted > 0) {
+    prisma.scrapingJob
+      .update({ where: { id: jobId }, data: { leadsCollected: { increment: inserted } } })
       .catch(() => {});
   }
 
   // Broadcast new leads to dashboard
   if (insertedLeads.length > 0) {
-    broadcastToUser(userId, 'leads:new', {
+    emitToUser(userId, 'leads:new', {
       count: insertedLeads.length,
       leads: insertedLeads,
-    }).catch(() => {});
+    });
   }
 
   res.status(201).json({ ok: true, inserted, updated, skipped, total: leads.length });
+});
+
+/**
+ * PATCH /api/worker/leads/:leadId/email
+ * 
+ * Allows the worker to quickly update the email address of an existing lead after deep scraping.
+ */
+leadsRouter.patch('/:leadId/email', async (req: Request, res: Response): Promise<void> => {
+  const { email } = req.body;
+  if (typeof email !== 'string') {
+    res.status(400).json({ error: 'Email string is required in body' });
+    return;
+  }
+  try {
+    const updated = await prisma.business.update({
+      where: { id: req.params.leadId, userId: req.userId },
+      data: { email }
+    });
+    
+    // Broadcast the update so the dashboard reflects the new email instantly
+    emitToUser(req.userId, 'leads:update', { lead: updated });
+    
+    res.json({ ok: true, id: updated.id, email: updated.email });
+  } catch (err) {
+    console.error('[worker/leads/email]', err);
+    res.status(500).json({ error: 'Failed to update email' });
+  }
 });
