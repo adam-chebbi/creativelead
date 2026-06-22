@@ -1,4 +1,4 @@
-import { getServerSession } from 'next-auth/react';
+import { getServerSession } from 'next-auth';
 import { authOptions } from '../api/auth/[...nextauth]/options';
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
@@ -10,7 +10,7 @@ export default async function ConnectWorkerPage() {
   
   if (!session?.user?.id) {
     // If not logged in, force login and return here
-    redirect('/auth/login?callbackUrl=/connect-worker');
+    redirect('/login?callbackUrl=/connect-worker');
   }
 
   // Generate a secure pairing token

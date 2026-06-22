@@ -53,7 +53,7 @@ export async function workerAuth(
     }
 
     req.userId = user.id;
-    req.userEmail = user.email;
+    req.userEmail = user.email!;
 
     const machineName = (req.headers['x-machine-name'] as string) || 'Unknown Machine';
     const platform   = (req.headers['x-platform'] as string)      || 'unknown';

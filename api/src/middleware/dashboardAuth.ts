@@ -46,7 +46,7 @@ export async function dashboardAuth(
     }
 
     req.userId    = user.id;
-    req.userEmail = user.email;
+    req.userEmail = user.email!;
     next();
   } catch (err) {
     console.error('[dashboardAuth]', err);

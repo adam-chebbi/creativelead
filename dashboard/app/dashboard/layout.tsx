@@ -57,7 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="px-4 py-4 border-t" style={{ borderColor: '#1e3232' }}>
           <p className="text-xs text-[#6a9090] truncate mb-2">{session?.user?.email}</p>
           <button
-            onClick={() => signOut({ callbackUrl: '/auth/login' })}
+            onClick={() => signOut({ callbackUrl: '/login' })}
             className="text-xs text-[#6a9090] hover:text-red-400 transition-colors">
             Sign out
           </button>

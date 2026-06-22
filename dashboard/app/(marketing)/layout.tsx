@@ -9,8 +9,8 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           <span className="font-bold text-white">Creative<span style={{ color: '#4ecdc4' }}>Leads</span></span>
         </Link>
         <div className="flex items-center gap-4">
-          <Link href="/auth/login" className="text-sm text-[#6a9090] hover:text-white transition-colors">Login</Link>
-          <Link href="/auth/signup" className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors" style={{ background: '#e8806a' }}>Get Started Free</Link>
+          <Link href="/login" className="text-sm text-[#6a9090] hover:text-white transition-colors">Login</Link>
+          <Link href="/signup" className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors" style={{ background: '#e8806a' }}>Get Started Free</Link>
         </div>
       </nav>
       {children}

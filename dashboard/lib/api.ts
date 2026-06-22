@@ -75,3 +75,9 @@ export const deleteJob = (id: string) =>
 // ── Sessions ──────────────────────────────────────────────────────────────
 export const getSessions = (params?: Record<string, string | number>) =>
   api.get('/api/dashboard/sessions', { params }).then((r) => r.data);
+
+export const getWorkerToken = () =>
+  api.get('/api/dashboard/settings/worker-token').then((r) => r.data);
+
+export const regenerateToken = () =>
+  api.post('/api/dashboard/settings/regenerate-token').then((r) => r.data);

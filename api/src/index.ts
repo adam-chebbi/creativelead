@@ -116,7 +116,7 @@ async function main() {
       console.log(`[DB] Reset ${resetCount.count} stuck follow-up jobs to pending`);
     }
 
-    app.listen(PORT, () => {
+    app.listen(PORT, "127.0.0.1", () => {
       console.log(`[API] Creative Leads API Bridge running on port ${PORT}`);
       console.log(`[API] Environment: ${process.env.NODE_ENV || 'development'}`);
     });

@@ -19,12 +19,12 @@ export default function LandingPage() {
           scrolls through results, and syncs everything to your dashboard — while you watch.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/auth/signup"
+          <Link href="/signup"
             className="px-8 py-4 rounded-xl font-semibold text-white text-lg transition-all hover:opacity-90"
             style={{ background: 'linear-gradient(135deg, #e8806a, #c4614a)' }}>
             Download the Worker — it&apos;s free
           </Link>
-          <Link href="/auth/login"
+          <Link href="/login"
             className="px-8 py-4 rounded-xl font-semibold text-[#4ecdc4] text-lg border border-[#4ecdc4]/30 hover:border-[#4ecdc4]/60 transition-all">
             View Dashboard
           </Link>
@@ -136,7 +136,7 @@ export default function LandingPage() {
                 </li>
               ))}
             </ul>
-            <Link href="/auth/signup"
+            <Link href="/signup"
               className="block text-center py-3 rounded-lg border border-[#4ecdc4]/30 text-[#4ecdc4] hover:border-[#4ecdc4]/60 transition-all">
               Get started free
             </Link>
@@ -161,7 +161,7 @@ export default function LandingPage() {
                 </li>
               ))}
             </ul>
-            <Link href="/auth/signup"
+            <Link href="/signup"
               className="block text-center py-3 rounded-lg font-semibold text-white transition-all hover:opacity-90"
               style={{ background: '#4ecdc4', color: '#080f0f' }}>
               Start Pro trial

@@ -23,7 +23,7 @@ export default function SignupPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setError('');
-    const res = await fetch('/api/auth/signup', {
+    const res = await fetch('/api/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password }),
@@ -82,7 +82,7 @@ export default function SignupPage() {
       </div>
       <p className="text-center text-sm text-[#6a9090] mt-6">
         Already have an account?{' '}
-        <Link href="/auth/login" className="text-[#4ecdc4] hover:underline">Sign in</Link>
+        <Link href="/login" className="text-[#4ecdc4] hover:underline">Sign in</Link>
       </p>
     </div>
   );

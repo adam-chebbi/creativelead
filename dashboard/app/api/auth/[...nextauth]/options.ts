@@ -11,7 +11,7 @@ import jwt from 'jsonwebtoken';
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
   session: { strategy: 'jwt' },
-  pages: { signIn: '/auth/login' },
+  pages: { signIn: '/login' },
   providers: [
     CredentialsProvider({
       name: 'credentials',
@@ -56,7 +56,7 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user && token.sub) {
-        session.user.id = token.sub as string;
+        (session.user as any).id = token.sub as string;
       }
       (session as any).accessToken = token.accessToken as string;
       return session;

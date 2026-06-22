@@ -19,8 +19,8 @@ function KanbanCard({ lead }: { lead: Lead }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lead.id, data: { lead } });
   const style = transform ? { transform: `translate(${transform.x}px,${transform.y}px)`, opacity: isDragging ? 0.4 : 1 } : {};
   return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes}
-      className="p-4 rounded-xl border cursor-grab active:cursor-grabbing" style={{ background: '#111c1c', borderColor: '#1e3232' }}>
+    <div ref={setNodeRef} style={{ ...style, background: '#111c1c', borderColor: '#1e3232' }} {...listeners} {...attributes} className="p-4 rounded-xl border cursor-grab active:cursor-grabbing">
+     
       <p className="text-white text-sm font-medium truncate">{lead.name}</p>
       <p className="text-[#6a9090] text-xs mt-1 truncate">{lead.city}</p>
       {lead.email && <p className="text-green-400 text-xs mt-1 flex items-center gap-1"><Check className="w-3 h-3" /> email</p>}

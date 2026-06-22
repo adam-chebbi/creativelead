@@ -69,7 +69,7 @@ export default function LoginPage() {
       </div>
       <p className="text-center text-sm text-[#6a9090] mt-6">
         No account?{' '}
-        <Link href="/auth/signup" className="text-[#4ecdc4] hover:underline">Sign up free</Link>
+        <Link href="/signup" className="text-[#4ecdc4] hover:underline">Sign up free</Link>
       </p>
     </div>
   );
