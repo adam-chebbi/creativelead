@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postbuild": "cp -r .next/static .next/standalone/.next/static 2>/dev/null || true && cp -r public .next/standalone/ 2>/dev/null || true"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.4.1",
