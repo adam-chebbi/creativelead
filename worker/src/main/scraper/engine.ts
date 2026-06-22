@@ -107,74 +107,103 @@ export class ScrapingEngine extends EventEmitter {
       for (const lead of leads) {
         if (!this.running) break;
 
-        // CAPTCHA check before each business
-        if (await detectCaptcha(this.page)) {
-          this.captchaWaiting = true;
-          this.emit('captcha-detected');
-          this.log('CAPTCHA detected — please solve it in the browser window, then click Resume.', 'error');
-          await this.waitForResume();
-          this.captchaWaiting = false;
-        }
-
-        // Pause check
-        while (this.paused && this.running) {
-          await new Promise(r => setTimeout(r, 500));
-        }
-        if (!this.running) break;
-
-        this.log(`Scraping details: ${lead.name}`, 'system');
-        const detail = await scrapeBusinessDetail(
-          this.page, lead.googleMapsUrl,
-          (msg) => this.log(msg, 'warn')
-        );
-        Object.assign(lead, detail);
-        detailCount++;
-
-        // ── Upload lead via worker endpoint (uses worker token auth) ──────────
-        let businessDbId: string | null = null;
         try {
-          // Upload the lead
-          await apiClient.post('/api/worker/leads', {
-            leads: [{ ...lead, sessionId: config.sessionId }],
-          });
-
-          // Look up the DB id using the dedicated worker find endpoint
-          if (lead.googleMapsUrl) {
-            const findRes = await apiClient.get<{ id: string } | null>(
-              '/api/worker/leads/find',
-              { params: { googleMapsUrl: lead.googleMapsUrl } }
-            );
-            businessDbId = findRes.data?.id ?? null;
+          // CAPTCHA check before each business
+          if (await detectCaptcha(this.page!)) {
+            this.captchaWaiting = true;
+            this.emit('captcha-detected');
+            this.log('CAPTCHA detected — please solve it in the browser window, then click Resume.', 'error');
+            await this.waitForResume();
+            this.captchaWaiting = false;
           }
-        } catch (err) {
-          this.log(`Upload failed for "${lead.name}": ${(err as Error).message}`, 'warn');
-        }
 
-        // ── Scrape & upload reviews ───────────────────────────────────────────
-        if (config.scrapeReviews && (lead.reviewCount ?? 0) > 0 && businessDbId) {
-          const navOk = await navigateToReviews(this.page, (msg) => this.log(msg));
-          if (navOk) {
-            const reviews = await collectReviews(
-              this.page, lead.name,
-              (msg) => this.log(msg, 'success')
-            );
-            if (reviews.length > 0) {
-              try {
-                await apiClient.post(`/api/worker/lead/${businessDbId}/reviews`, { reviews });
-                this.reviewsCollected += reviews.length;
-                this.log(`Uploaded ${reviews.length} reviews for ${lead.name}`, 'success');
-              } catch (err) {
-                this.log(`Reviews upload failed: ${(err as Error).message}`, 'warn');
+          // Pause check
+          while (this.paused && this.running) {
+            await new Promise(r => setTimeout(r, 500));
+          }
+          if (!this.running) break;
+
+          this.log(`Scraping details: ${lead.name}`, 'system');
+          const detail = await scrapeBusinessDetail(
+            this.page!, lead.googleMapsUrl,
+            (msg) => this.log(msg, 'warn')
+          );
+          Object.assign(lead, detail);
+          detailCount++;
+
+          // ── Upload lead via worker endpoint (uses worker token auth) ──────────
+          let businessDbId: string | null = null;
+          try {
+            // Upload the lead
+            const res = await apiClient.post('/api/worker/leads', {
+              leads: [{ ...lead, sessionId: config.sessionId }],
+            });
+
+            if (res.data?.updated > 0) {
+              this.log(`Lead updated (Duplicate detected): ${lead.name}`, 'info');
+            } else if (res.data?.inserted > 0) {
+              this.log(`New lead saved: ${lead.name}`, 'success');
+            }
+
+            // Look up the DB id using the dedicated worker find endpoint
+            if (lead.googleMapsUrl) {
+              const findRes = await apiClient.get<{ id: string } | null>(
+                '/api/worker/leads/find',
+                { params: { googleMapsUrl: lead.googleMapsUrl } }
+              );
+              businessDbId = findRes.data?.id ?? null;
+            }
+          } catch (err) {
+            this.log(`Upload failed for "${lead.name}": ${(err as Error).message}`, 'warn');
+          }
+
+          // ── Scrape & upload reviews ───────────────────────────────────────────
+          if (config.scrapeReviews && (lead.reviewCount ?? 0) > 0 && businessDbId) {
+            const navOk = await navigateToReviews(this.page!, (msg) => this.log(msg));
+            if (navOk) {
+              const reviews = await collectReviews(
+                this.page!, lead.name,
+                (msg) => this.log(msg, 'success')
+              );
+              if (reviews.length > 0) {
+                try {
+                  await apiClient.post(`/api/worker/lead/${businessDbId}/reviews`, { reviews });
+                  this.reviewsCollected += reviews.length;
+                  this.log(`Uploaded ${reviews.length} reviews for ${lead.name}`, 'success');
+                } catch (err) {
+                  this.log(`Reviews upload failed: ${(err as Error).message}`, 'warn');
+                }
               }
             }
           }
-        }
 
-        this.emit('progress', {
-          collected: detailCount,
-          total:     leads.length,
-          synced:    detailCount,
-        });
+          this.emit('progress', {
+            collected: detailCount,
+            total:     leads.length,
+            synced:    detailCount,
+          });
+        } catch (err: any) {
+          const msg = err.message || '';
+          if (msg.includes('Target closed') || msg.includes('browser has been closed') || msg.includes('Page closed')) {
+            this.log(`Browser crashed or was closed! Attempting auto-restart...`, 'error');
+            try {
+              if (this.context) await this.context.close().catch(() => {});
+              this.context = await chromium.launchPersistentContext(userDataDir, launchOptions);
+              this.page = await this.context.newPage();
+              await this.context.addInitScript(() => {
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+              });
+              this.log(`Browser restarted successfully. Resuming with next lead...`, 'system');
+              continue; // Skip the current lead and move to the next to prevent crash loops on a specific lead
+            } catch (restartErr: any) {
+              this.log(`Failed to restart browser: ${restartErr.message}`, 'error');
+              throw restartErr; // Fatal
+            }
+          } else {
+            throw err; // Other fatal errors
+          }
+        }
       }
 
       this.log(`Scraping complete — ${detailCount} leads, ${this.reviewsCollected} reviews`, 'success');

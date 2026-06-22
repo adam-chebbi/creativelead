@@ -5,6 +5,9 @@ import { getLeads, getLeadFilters, bulkStageLeads, bulkDeleteLeads, updateLead, 
 import { stageColor, timeAgo } from '@/lib/utils';
 import { ExternalLink, Star, Check, ArrowLeft, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import { EmptyState } from '@/components/EmptyState';
+
+import { LeadDetailPanel } from '@/components/LeadDetailPanel';
 
 const STAGES = ['New','Contacted','Replied','Closed','Unsubscribed'];
 
@@ -19,6 +22,7 @@ export default function LeadsPage() {
   const [sortDir, setSortDir]   = useState('desc');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkStage, setBulkStage] = useState('');
+  const [viewLeadId, setViewLeadId] = useState<string | null>(null);
 
   const params = { page, limit: 50, ...(search && { search }), ...(city && { city }), ...(category && { category }), ...(stage && { stage }), ...(hasEmail && { hasEmail }), sortBy, sortDir };
 
@@ -54,6 +58,8 @@ export default function LeadsPage() {
 
   return (
     <div className="p-8">
+      <LeadDetailPanel leadId={viewLeadId} onClose={() => { setViewLeadId(null); refetch(); }} />
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Leads</h1>
@@ -108,60 +114,70 @@ export default function LeadsPage() {
       )}
 
       {/* Table */}
-      <div className="rounded-xl border overflow-hidden" style={{ background: '#0d1a1a', borderColor: '#1e3232' }}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-xs text-[#6a9090]" style={{ borderColor: '#1e3232', background: '#0a1414' }}>
-                <th className="px-4 py-3 text-left w-8">
-                  <input type="checkbox" checked={selected.size === leads.length && leads.length > 0} onChange={toggleAll}
-                    className="rounded" />
-                </th>
-                <th className="px-4 py-3 text-left">Business</th>
-                <th className="px-4 py-3 text-left">Category</th>
-                <th className="px-4 py-3 text-left">City</th>
-                <th className="px-4 py-3 text-left">Rating</th>
-                <th className="px-4 py-3 text-left">Email</th>
-                <th className="px-4 py-3 text-left">Stage</th>
-                <th className="px-4 py-3 text-left">Added</th>
-                <th className="px-4 py-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y" style={{ borderColor: '#1e3232' }}>
-              {leads.map((lead: any) => (
-                <tr key={lead.id} className="hover:bg-[#111c1c] transition-colors">
-                  <td className="px-4 py-3">
-                    <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelect(lead.id)} className="rounded" />
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-white font-medium truncate max-w-[180px]">{lead.name}</p>
-                    {lead.website && <a href={lead.website} target="_blank" rel="noreferrer" className="text-xs text-[#6a9090] hover:text-[#4ecdc4] truncate max-w-[180px] flex items-center gap-1 mt-0.5"><ExternalLink className="w-3 h-3" /> {lead.website}</a>}
-                  </td>
-                  <td className="px-4 py-3 text-[#6a9090] text-xs">{lead.category || '—'}</td>
-                  <td className="px-4 py-3 text-[#6a9090] text-xs">{lead.city || '—'}</td>
-                  <td className="px-4 py-3 text-[#6a9090] text-xs">{lead.rating ? <span className="flex items-center gap-1"><Star className="w-3 h-3" fill="currentColor" /> {lead.rating}</span> : '—'}</td>
-                  <td className="px-4 py-3">
-                    {lead.email ? <span className="text-green-400 text-xs flex items-center gap-1"><Check className="w-3 h-3" /> {lead.email}</span> : <span className="text-[#6a9090] text-xs">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <select value={lead.stage} onChange={e => handleStageChange(lead.id, e.target.value)}
-                      className={`px-2 py-1 rounded-full text-xs border outline-none cursor-pointer ${stageColor(lead.stage)}`}
-                      style={{ background: 'transparent' }}>
-                      {STAGES.map(s => <option key={s} value={s} style={{ background: '#0d1a1a', color: '#fff' }}>{s}</option>)}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 text-[#6a9090] text-xs">{timeAgo(lead.createdAt)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Link href={`/dashboard/leads/${lead.id}`} className="text-xs text-[#4ecdc4] hover:underline">View</Link>
-                      <button onClick={() => handleDelete(lead.id)} className="text-xs text-red-400 hover:underline">Delete</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {leads.length === 0 ? (
+        <div className="mt-8">
+          <EmptyState 
+            title="No leads found" 
+            description="We couldn't find any leads matching your current filters. Try adjusting your search criteria." 
+          />
         </div>
+      ) : (
+        <div className="rounded-xl border overflow-hidden" style={{ background: '#0d1a1a', borderColor: '#1e3232' }}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs text-[#6a9090]" style={{ borderColor: '#1e3232', background: '#0a1414' }}>
+                  <th className="px-4 py-3 text-left w-8">
+                    <input type="checkbox" checked={selected.size === leads.length && leads.length > 0} onChange={toggleAll}
+                      className="rounded" />
+                  </th>
+                  <th className="px-4 py-3 text-left">Business</th>
+                  <th className="px-4 py-3 text-left">Category</th>
+                  <th className="px-4 py-3 text-left">City</th>
+                  <th className="px-4 py-3 text-left">Rating</th>
+                  <th className="px-4 py-3 text-left">Email</th>
+                  <th className="px-4 py-3 text-left">Stage</th>
+                  <th className="px-4 py-3 text-left">Added</th>
+                  <th className="px-4 py-3 text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y" style={{ borderColor: '#1e3232' }}>
+                {leads.map((lead: any) => (
+                  <tr key={lead.id} className="hover:bg-[#111c1c] transition-colors">
+                    <td className="px-4 py-3">
+                      <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelect(lead.id)} className="rounded" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-white font-medium truncate max-w-[180px]">{lead.name}</p>
+                      {lead.website && <a href={lead.website} target="_blank" rel="noreferrer" className="text-xs text-[#6a9090] hover:text-[#4ecdc4] truncate max-w-[180px] flex items-center gap-1 mt-0.5"><ExternalLink className="w-3 h-3" /> {lead.website}</a>}
+                    </td>
+                    <td className="px-4 py-3 text-[#6a9090] text-xs">{lead.category || '—'}</td>
+                    <td className="px-4 py-3 text-[#6a9090] text-xs">{lead.city || '—'}</td>
+                    <td className="px-4 py-3 text-[#6a9090] text-xs">{lead.rating ? <span className="flex items-center gap-1"><Star className="w-3 h-3" fill="currentColor" /> {lead.rating}</span> : '—'}</td>
+                    <td className="px-4 py-3">
+                      {lead.email ? <span className="text-green-400 text-xs flex items-center gap-1"><Check className="w-3 h-3" /> {lead.email}</span> : <span className="text-[#6a9090] text-xs">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <select value={lead.stage} onChange={e => handleStageChange(lead.id, e.target.value)}
+                        className={`px-2 py-1 rounded-full text-xs border outline-none cursor-pointer ${stageColor(lead.stage)}`}
+                        style={{ background: 'transparent' }}>
+                        {STAGES.map(s => <option key={s} value={s} style={{ background: '#0d1a1a', color: '#fff' }}>{s}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-4 py-3 text-[#6a9090] text-xs">{timeAgo(lead.createdAt)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setViewLeadId(lead.id)} className="text-xs text-[#4ecdc4] hover:underline">View</button>
+                        <button onClick={() => handleDelete(lead.id)} className="text-xs text-red-400 hover:underline">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
         {/* Pagination */}
         {pagination && pagination.totalPages > 1 && (

@@ -1,480 +1,448 @@
-# AutoReach — Production Blueprint
-### Target: `leads.creativecomet.tn` (VPS)
-### Architecture Principle: Web = Desktop. One codebase, one data layer, scraping runs on the user's machine.
+# AutoReach — SaaS Completion Blueprint
+
+> **Version:** 1.0 — Draft  
+> **Scope:** What is missing to make this a professional, production-grade SaaS.  
+> This document contains no code. It is a product and architecture specification.  
+> Billing, payments, email sending, account verification, and newsletters are **explicitly out of scope** — the product is free and open to all users from day one, no verification required.
 
 ---
 
-## 1. The Big Picture — What You're Actually Building
+## Table of Contents
 
-AutoReach is a **Figma-model SaaS**. You use the web version at `leads.creativecomet.tn` and it is identical to the desktop app in every way — same pages, same data, same UI — except the desktop app can run the Playwright/Chromium scraper locally on the user's machine. Everything syncs in real time to the same backend. Users who don't need local scraping never need to install anything.
-
-**The Three-Layer Stack:**
-
-```
-┌─────────────────────────────────────────────────────┐
-│  LAYER 1 — Dashboard  (Next.js, port 3040)          │
-│  Served at leads.creativecomet.tn via Nginx          │
-│  Identical UI whether opened in browser or Electron  │
-└──────────────────────┬──────────────────────────────┘
-                       │  REST + SSE
-┌──────────────────────▼──────────────────────────────┐
-│  LAYER 2 — API Bridge  (Node/Express, port 3070)     │
-│  Auth, data reads/writes, follow-up cron, email send │
-│  Talks to PostgreSQL (local Docker container)        │
-└──────────────────────┬──────────────────────────────┘
-                       │  Worker API (JWT + Worker Secret)
-┌──────────────────────▼──────────────────────────────┐
-│  LAYER 3 — Desktop Worker  (Electron + Playwright)   │
-│  Runs on user's machine                              │
-│  Scrapes Google Maps + websites, pushes leads to API │
-└─────────────────────────────────────────────────────┘
-```
+1. [Executive Summary](#1-executive-summary)
+2. [Complete Gap Matrix](#2-complete-gap-matrix)
+3. [Critical Gap #1 — Role-Based Access Control & Admin Panel](#3-critical-gap-1--role-based-access-control--admin-panel)
+4. [Critical Gap #2 — Desktop OAuth Token Sync](#4-critical-gap-2--desktop-oauth-token-sync)
+5. [Reliability, Observability & Infrastructure](#5-reliability-observability--infrastructure)
+6. [Security Hardening](#6-security-hardening)
+7. [User Experience Completeness](#7-user-experience-completeness)
+8. [Legal & Compliance](#8-legal--compliance)
+9. [Implementation Roadmap](#9-implementation-roadmap)
+10. [Appendix — What is Already Working](#10-appendix--what-is-already-working)
 
 ---
 
-## 2. Current State Audit — What Is Broken and Why
+## 1. Executive Summary
 
-### 2.1 Identity Crisis — Three Incompatible Backends Exist Simultaneously
+AutoReach is a lead-generation SaaS composed of three layers: a Next.js web dashboard, a headless Node.js API, and an Electron-based desktop worker that scrapes Google Maps using a locally controlled browser. The core scraping engine, data pipeline, and basic dashboard are operational.
 
-The codebase contains **three completely different backend implementations** that are not connected:
+**The product is intentionally free and open.** No billing, no email verification, no subscription tiers. Anyone who signs in via OAuth gets immediate full access. This keeps the architecture simple and the onboarding frictionless.
 
-- `app.py` — The original Flask/Python monolith with SQLite/Turso. Still has scraping, emailing, all routes.
-- `api/src/index.ts` — A new Node/Express API bridge with Prisma + PostgreSQL. The "V2" backend.
-- `autoreach_core/` — A Python CLI core with its own SQLite database, its own emailer, its own scraper.
+Despite this simplified model, several gaps prevent AutoReach from being considered a professional, production-grade SaaS. This document catalogues every missing piece across four domains: **authorization**, **desktop authentication UX**, **reliability**, and **user experience**.
 
-**None of these share the same database.** The desktop worker connects to `api.autoreach.dev` (an external domain) instead of your VPS. The dashboard connects to neither `app.py` nor the CLI.
-
-**Fix:** Retire `app.py` as the web server. The Node API (`api/`) becomes the single backend. All clients — web, desktop, mobile — talk only to the Node API.
-
-### 2.2 The Desktop Worker Points to the Wrong Server
-
-In `worker-release.yml` the build environment sets `API_BASE_URL: https://api.autoreach.dev`. Every released desktop app built from this CI talks to someone else's server.
-
-**Fix:** Change to `https://leads.creativecomet.tn/api` in the CI secrets and Electron build config.
-
-### 2.3 Real-Time Sync Is Not Implemented
-
-`ScrapingState.tsx` listens to Electron IPC events. But there is **no WebSocket or SSE channel** from the API to the web dashboard. If you open the web app while the desktop is scraping, the web app does not update — you have to manually refresh leads.
-
-**Fix:** Add a Server-Sent Events (SSE) channel on the API. The desktop worker pushes each lead to the API; the API broadcasts that lead via SSE to any open web dashboard tabs for the same user. This is how Figma does it.
-
-### 2.4 Auth Is Split and Inconsistent
-
-- `app.py` uses Flask sessions + a single `WEB_PASSWORD` — no per-user accounts.
-- `auth.py` (Flask) implements GitHub, Discord, Google OAuth and JWT for the Flutter mobile app.
-- `dashboard/` uses NextAuth with `@auth/prisma-adapter` connecting to Supabase.
-- `api/src/` has its own JWT middleware with `jsonwebtoken`.
-
-A user who signs in with Google on the web dashboard is a **different user identity** from a user who authenticates with a JWT in the desktop worker. There is no single source of truth.
-
-**Fix:** NextAuth on the dashboard issues JWTs. Those JWTs are the only auth token in the system. The API validates them. The desktop worker stores one JWT and sends it with every API call. All Flask auth is retired.
-
-### 2.5 The Database Schema Is Duplicated and Diverged
-
-Flask operates on a `businesses` table. The Node API uses a `Business` Prisma model. The CLI uses a `leads` table. All three have different column names for the same concept. Stage values differ. Follow-up tables have different structures.
-
-**Fix:** One canonical Prisma schema. All data access goes through Prisma. The CLI is archived.
-
-### 2.6 The Email Sending Architecture Leaks API Keys
-
-`/api/send-email` in Flask accepts a `resend_api_key` from the client in the request body. The user's Resend API key is sent to your server on every email send and can appear in server logs. If the VPS is ever compromised, every user's Resend key is exposed.
-
-**Fix:** The Resend API key is stored encrypted in the user's settings row on the server using AES-256-GCM with a server-side `ENCRYPTION_KEY`. The client never sends the key in email requests. The server decrypts and uses it.
-
-### 2.7 The Docker Compose Has No Reverse Proxy and No HTTPS
-
-The `docker-compose.yml` exposes ports 3040 and 3070 bound to `127.0.0.1`. There is no Nginx container, no SSL termination, no Certbot. The deploy script runs `docker-compose up` but never sets up the Nginx vhost or certificates.
-
-**Fix:** Add an Nginx container that terminates SSL and proxies routes to the correct service. Certbot obtains the certificate once and auto-renews via cron.
-
-### 2.8 Supabase Is an Unnecessary External Dependency
-
-The dashboard and API both import `@supabase/supabase-js`. But you have a VPS — Supabase is only being used as a managed Postgres host. This adds cost and an external point of failure.
-
-**Fix:** Run PostgreSQL directly in Docker on the VPS. Remove Supabase entirely. Prisma connects to the local container.
-
-### 2.9 The Follow-up Cron Has No Idempotency Guard
-
-`followupCron.ts` runs every hour and processes pending follow-ups. If the server restarts mid-batch, follow-ups can be sent twice. There is no lock or atomic status transition.
-
-**Fix:** Use an atomic `UPDATE ... SET status = 'processing' WHERE status = 'pending' RETURNING id` to claim rows. Only process rows you own. Reset `processing` rows to `pending` on startup if they are older than 10 minutes.
-
-### 2.10 The CORS Config Is Too Permissive
-
-`app.py` allows any origin. The Node API skips the origin check entirely for requests with no `Origin` header, meaning any server-to-server request can hit the API unauthenticated.
-
-**Fix:** All `/api/worker/*` routes require both a valid user JWT and a `X-Worker-Token` header (a shared secret bundled into Electron at build time and stored in `.env` as `WORKER_SECRET`).
+> **The two most urgent gaps are:**
+> 1. Authentication exists but authorization (roles + admin panel) does not.
+> 2. The desktop app requires manual token paste — this is not acceptable in a modern SaaS.
 
 ---
 
-## 3. The Production Architecture
+## 2. Complete Gap Matrix
 
-### 3.1 Server Layout (leads.creativecomet.tn)
+Items removed from scope: billing/Stripe, subscription plans, email verification, welcome emails, newsletters, invoice delivery, payment webhooks, free trial logic, cookie consent (no tracking).
 
-```
-/var/www/autoreach/
-├── docker-compose.yml
-├── .env                      ← server secrets, never committed
-├── nginx/
-│   └── autoreach.conf
-├── certbot/                  ← SSL certs, auto-renewed
-├── postgres-data/            ← PostgreSQL data volume
-├── public/
-│   └── downloads/            ← Electron installer binaries (.exe, .dmg, .AppImage)
-├── dashboard/
-└── api/
-```
-
-### 3.2 Docker Compose Services (Four Containers, One Network)
-
-**postgres** — PostgreSQL 16 Alpine. Data persisted to `./postgres-data`. Not exposed externally. Only accessible within the Docker network on `postgres:5432`.
-
-**api** — Node/Express. Connects to `postgres` container via internal Docker DNS. Runs Prisma migrations on startup. Exposes port 3070 internally only.
-
-**dashboard** — Next.js standalone build. Connects to the api container at `http://api:3070`. Exposes port 3040 internally only.
-
-**nginx** — Nginx Alpine. The only container with external ports (80 and 443). Terminates SSL. Proxies `/api/*` to the api container and all other traffic to the dashboard container.
-
-### 3.3 Nginx Routing Rules
-
-```
-leads.creativecomet.tn/               → dashboard:3040
-leads.creativecomet.tn/api/           → api:3070
-leads.creativecomet.tn/api/dashboard/stream → SSE (no buffering, 3600s timeout)
-leads.creativecomet.tn/downloads/     → static files from /var/www/autoreach/public/downloads/
-```
-
-Three directives are mandatory on the SSE location or it will not work through Nginx:
-`proxy_buffering off`, `proxy_cache off`, `add_header X-Accel-Buffering no`.
-
-### 3.4 Single Database Schema (Prisma)
-
-**User** — id, email, name, avatar, provider, providerAccountId, createdAt. Relations: Settings (one), Businesses (many), SentLogs (many), FollowupLogs (many), ScrapeJobs (many), WorkerSessions (many).
-
-**Settings** — userId (unique FK), groqApiKeyEncrypted, resendApiKeyEncrypted, resendFromEmail, senderName, followupStep3Enabled, followupStep7Enabled, followupStep14Enabled, emailTemplateId, googleMapsApiKeyEncrypted.
-
-**Business** — id, userId (FK), name, address, city, phone, website, email, stage (enum: New/Contacted/Replied/Closed/Unsubscribed), notes, rating, reviewCount, openingHours (JSON), attributes (String array), unsubscribed (Boolean), scrapeJobId (FK nullable), placeId (unique per user), createdAt, updatedAt.
-
-**Review** — id, businessId (FK), authorName, rating, text, publishedAt.
-
-**SentLog** — id, userId (FK), businessId (FK), businessName, toEmail, subject, body, language, status (sent/failed), templateId, senderEmail, sentAt.
-
-**FollowupLog** — id, userId (FK), businessId (FK), businessName, toEmail, followupStep (1/2/3), status (pending/processing/sent/skipped/replied), scheduledFor (DateTime), subject, body, language, sentAt.
-
-**ScrapeJob** — id, userId (FK), city, businessType, maxResults, scrapeReviews, status (queued/running/paused/completed/cancelled), leadsCollected, leadsTotal, createdAt, updatedAt.
-
-**WorkerSession** — id, userId (FK), tokenHash (the `WORKER_SECRET` HMAC'd with the user's id), lastSeenAt, createdAt.
-
-### 3.5 Authentication Flow
-
-NextAuth is the single auth entry point. It supports GitHub, Google, and email/password credentials. On sign-in, NextAuth upserts a `User` row via Prisma adapter.
-
-NextAuth sessions contain the user's `id`. Server components and server-side API routes call `getServerSession()`. Client components and the API bridge receive a signed JWT from NextAuth.
-
-The Electron worker stores one JWT after the pairing flow. Every worker API call includes `Authorization: Bearer <jwt>` and `X-Worker-Token: <WORKER_SECRET>`. The API bridge validates both.
-
-**Desktop pairing flow:**
-1. User opens the desktop app for the first time.
-2. App opens `leads.creativecomet.tn/connect-worker` in the system browser.
-3. User authenticates with NextAuth normally.
-4. Server generates a `WorkerSession` row, hashes the session token, redirects to `autoreach-worker://auth?token=<token>`.
-5. Electron's `protocol.handle('autoreach-worker')` intercepts this URL.
-6. The app stores the token. Future requests use it as the Bearer token.
-
----
-
-## 4. The Sync Model — Desktop ↔ Web (The Figma Model)
-
-### 4.1 What Runs Where
-
-| Action | Where it runs | How it syncs |
+| Feature / Capability | Status | Priority |
 |---|---|---|
-| Google Maps scraping | Desktop worker (Playwright) | Worker POSTs each lead to API as found |
-| Website email extraction | Desktop worker | Worker PATCHes lead with email |
-| Review scraping | Desktop worker | Worker POSTs reviews to API |
-| Email sending | API server | Triggered from web or desktop, uses stored key |
-| Follow-up scheduling | API server (cron) | Fully automatic |
-| Viewing leads / pipeline | Web or Desktop (same Next.js) | API reads from DB |
-| Stage changes | Web or Desktop | API writes to DB, SSE broadcasts change |
-| Settings | Web or Desktop | API writes encrypted values to DB |
-
-### 4.2 Real-Time Lead Sync (SSE)
-
-When the desktop worker finds a lead, it POSTs to `POST /api/worker/lead`. The API saves to DB and immediately publishes an SSE event on `GET /api/dashboard/stream` to all open connections for that user.
-
-The API uses a module-scoped `Map<userId, Set<Response>>` to track open SSE connections. No Redis, no external pub/sub required for a single VPS instance. When a connection closes, remove it from the set. When a new lead arrives, iterate the set and write an event to each connection.
-
-The web dashboard subscribes on mount via `EventSource`. The Electron main window loads `leads.creativecomet.tn` directly (a `BrowserWindow` pointing to your VPS URL) so it receives SSE automatically.
-
-### 4.3 The Desktop App Is the Web Dashboard in an Electron Shell
-
-This is the key architectural decision. The Electron main window calls `win.loadURL('https://leads.creativecomet.tn')`. The main window **is** the web app — not a bundled React build.
-
-What Electron adds on top:
-- The `window.autoreach` preload bridge (injected into the loaded web page) for scraping controls.
-- The `autoreach-worker://` protocol handler for auth pairing.
-- A system tray icon and native menus.
-- The ability to launch and control headless Chromium via Playwright.
-- A separate small tray popup `BrowserWindow` for `IdleState` / `ScrapingState` panels — this can remain bundled since it is tray-specific and small.
-
-**Consequence:** When you deploy new UI code to the VPS, all desktop users get the update automatically on next open. You only release a new desktop installer when the Electron `main.ts` or Playwright scraper code changes. The web and desktop are always in sync by construction.
+| **Authorization & Admin** | | |
+| Role-based access control (RBAC) | ❌ Missing | 🔴 Critical |
+| Admin panel with user management | ❌ Missing | 🔴 Critical |
+| Desktop ↔ Web seamless OAuth token sync | ❌ Missing | 🔴 Critical |
+| Session invalidation & device management | ❌ Missing | 🟠 High |
+| Audit log (who did what, when) | ❌ Missing | 🟡 Medium |
+| **Infrastructure & Reliability** | | |
+| Rate-limit API endpoints | ❌ Missing | 🟠 High |
+| Global error boundary & fallback UI | ❌ Missing | 🟠 High |
+| Structured server-side logging | ❌ Missing | 🟠 High |
+| Worker crash auto-restart | ❌ Missing | 🟡 Medium |
+| Health-check endpoint (complete) | 🟡 Incomplete | 🟡 Medium |
+| Database connection pooling (PgBouncer) | ❌ Missing | 🟡 Medium |
+| **Security** | | |
+| CSRF protection on all mutations | ❌ Missing | 🔴 Critical |
+| Input sanitization & validation (Zod) | 🟡 Incomplete | 🟠 High |
+| Secrets rotation strategy documented | ❌ Missing | 🟠 High |
+| Content-Security-Policy headers | ❌ Missing | 🟡 Medium |
+| Dependency audit pipeline (npm audit) | ❌ Missing | 🟡 Medium |
+| **User Experience** | | |
+| Empty states (no leads, no sessions) | ❌ Missing | 🟡 Medium |
+| Global toast / notification system | 🟡 Incomplete | 🟡 Medium |
+| Real-time scraping progress on web dashboard | ❌ Missing | 🟡 Medium |
+| Lead deduplication indicator | ❌ Missing | 🟡 Medium |
+| Bulk export (CSV, XLSX) with column mapping | 🟡 Incomplete | 🟡 Medium |
+| Lead detail modal / side panel | ❌ Missing | 🟡 Medium |
+| Advanced filter & sort on leads table | 🟡 Incomplete | 🟡 Medium |
+| Desktop app download page with OS detection | ❌ Missing | 🟡 Medium |
+| Desktop auto-update (electron-updater) | ❌ Missing | 🟡 Medium |
+| First-run onboarding checklist (in-app) | ❌ Missing | 🟡 Medium |
+| **Legal** | | |
+| Terms of Service page | ❌ Missing | 🟠 High |
+| Privacy Policy page | ❌ Missing | 🟠 High |
+| Data deletion (right to be forgotten) flow | ❌ Missing | 🟡 Medium |
 
 ---
 
-## 5. File-by-File Changes Required
+## 3. Critical Gap #1 — Role-Based Access Control & Admin Panel
 
-### 5.1 Retire (Delete or Archive)
+### 3.1 What exists today
 
-- `app.py` — Flask monolith. Replaced by Node API + Next.js.
-- `templates/` — Jinja2 HTML. Replaced by Next.js pages.
-- `auth.py` (Flask) — Replaced by NextAuth.
-- `followup.py` (Flask) — Replaced by `api/src/jobs/followupCron.ts`.
-- `emailer.py` (root) — Replaced by Node API email route.
-- `lead_finder.py` — Replaced by Electron Playwright scraper.
-- `email_scraper.py` — Replaced by Electron email crawler.
-- `autoreach_core/` — CLI code. Archive separately if needed.
-- `cli/` — Archive separately.
-- `render.yaml` — Not deploying to Render.
-- `worker/src/renderer/` (the full bundled React app) — The main window now loads the VPS URL. Only the tray popup components remain as bundled React.
+NextAuth is configured with GitHub and Google OAuth providers. There is a `User` model in Prisma. There is **no role field** on the user, no middleware that restricts routes by role, and no admin-only interface anywhere in the codebase. Any authenticated user currently has identical access to all parts of the application.
 
-### 5.2 api/ — Changes Required
+### 3.2 What is missing
 
-**What exists and works:** Express server structure, Prisma setup, rate limiting, error handling, follow-up cron skeleton, dashboard and worker route files, JWT middleware.
+#### 3.2.1 Role field on the User model
 
-**What must be added or fixed:**
+The `User` table must gain a `role` column with at least three possible values: `USER`, `ADMIN`, and `SUPER_ADMIN`. The default value for all new signups is `USER`. Role assignment is performed only through the admin panel or directly in the database by a `SUPER_ADMIN`. No self-service role escalation is possible.
 
-`POST /api/worker/lead` — After saving to DB, emit SSE event to all open connections for this user. This route does not yet fire SSE.
+#### 3.2.2 Middleware-level route protection
 
-`GET /api/dashboard/stream` — This endpoint does not exist yet. Create it. It sets headers `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, then holds the connection open. Register the response in the SSE map for the user. On client disconnect, remove it.
+Every request that reaches a protected Next.js route or API endpoint must pass through a centralized authorization check. The check must verify both that the user is authenticated **and** that their role satisfies the minimum required role for that resource.
 
-`POST /api/dashboard/send-email` — Currently expects the Resend key in the request body. Change to: read `resendApiKeyEncrypted` from the user's Settings row, decrypt with `ENCRYPTION_KEY`, use the decrypted key to call Resend. Never accept the key in the request.
+- Unauthenticated requests → redirect to `/login`
+- Authenticated requests with insufficient role → `403 Forbidden`
+- All authorization decisions must be enforced server-side, never client-side only
 
-`POST /api/dashboard/settings` — Accept settings including API keys. Encrypt keys before saving with AES-256-GCM using `ENCRYPTION_KEY`. Return decrypted values only in the settings GET (for display in the UI), never log them.
+#### 3.2.3 Admin Panel — `/admin` route group
 
-`POST /api/worker/scrape/jobs` — Create a `ScrapeJob` row with `status: 'running'`. Return the job ID to the worker.
+The admin panel lives under a `/admin` route group that requires `role >= ADMIN`. It must be invisible in the navigation for non-admins and must not be publicly discoverable. It must contain the following pages:
 
-`PATCH /api/worker/scrape/jobs/:jobId` — Update status, leadsCollected, leadsTotal.
+**User List**
+A paginated table of all registered users showing: name, email, role, created date, last active timestamp, and total lead count. Supports search by email and filter by role.
 
-`POST /api/worker/heartbeat` — Update `WorkerSession.lastSeenAt` for the authenticated user.
+**User Detail**
+Individual user view with the ability to:
+- Change the user's role (`USER` → `ADMIN` or back)
+- Suspend or reinstate an account
+- View that user's scraping sessions and exported leads
+- Delete the user's account and all associated data
 
-`POST /api/worker/lead/:leadId/reviews` — Bulk insert reviews for a business.
+**Impersonation**
+A `SUPER_ADMIN` can log in as any `USER` for debugging and support purposes. While impersonating, a persistent banner is displayed at the top of every page identifying the session as an impersonation. Impersonation sessions expire after 1 hour or on manual exit. Every impersonation event is written to the audit log.
 
-`PATCH /api/worker/lead/:leadId/email` — Update the email field on a business.
+**Usage Overview**
+Aggregate metrics visible at a glance:
+- Total registered users
+- Total leads ever scraped
+- Scraping sessions started today / this week / this month
+- Currently active desktop workers
 
-`GET /api/worker/status` — Return whether this user's worker session is active and last seen. Used by the web dashboard to show "Worker online/offline."
+**Feature Flags**
+A list of toggleable boolean flags (e.g., `maintenance_mode`, `enable_bulk_export_v2`) that take effect immediately without a deployment. Flags are stored in the database and read by the application at runtime.
 
-`GET /unsubscribe` — Public route (no auth). Port the unsubscribe logic from `app.py` exactly. Sets `unsubscribed = true` and `stage = 'Unsubscribed'` on the Business row. Renders a simple HTML response (or redirects to a Next.js page).
+**Audit Log**
+A timestamped, append-only record of every admin action: role changes, account suspensions, user deletions, and impersonations. Each entry records: actor ID, actor email, target ID (if applicable), action name, and ISO timestamp. The log is read-only — no admin can delete entries.
 
-`POST /api/webhooks/resend` — Resend webhook for reply detection. Validates the Resend webhook signature. When a `reply` event arrives, find the Business by email, set stage to `Replied`, cancel pending FollowupLog rows for that business.
-
-The `followupCron.ts` — Add the idempotency guard described in Section 2.9. Add Arabic language support to `generateFollowup()`.
-
-Remove `@supabase/supabase-js` from `package.json`. All realtime is handled via the in-process SSE map.
-
-Change `API_BASE_URL` references in all CI workflows and Electron code from `api.autoreach.dev` to `leads.creativecomet.tn/api`.
-
-### 5.3 dashboard/ — Changes Required
-
-**What exists and works:** App router structure, TanStack Query, Radix UI, teal/coral dark theme, lead detail page, outreach page, settings page, pipeline view, download page route, middleware protecting `/dashboard` and `/download`.
-
-**What must be added or fixed:**
-
-Remove `@supabase/supabase-js` from `package.json`. Replace any Supabase realtime usage with the SSE `EventSource` client. Create a `useLeadStream()` hook that connects to `/api/dashboard/stream` and appends incoming leads to the TanStack Query cache.
-
-NextAuth config (`app/api/auth/[...nextauth]/route.ts`) must set `NEXTAUTH_URL=https://leads.creativecomet.tn`. OAuth callback URLs must match. The adapter must use the shared Prisma instance (same `DATABASE_URL` as the API — both containers connect to the same Postgres, and since they are separate Node processes, each gets its own Prisma connection pool).
-
-`/dashboard/scrape` page — The current `IdleState` / `ScrapingState` panels from the Electron worker have equivalent web versions needed here. If no worker is connected, show a "Download the desktop app to enable scraping" message with a link to `/download`. If a worker is connected (check `/api/worker/status`), show the scrape controls (city, business type, max results, start button). Progress updates come via SSE.
-
-`/connect-worker` page — This page is the landing point after the user clicks the pairing link in the desktop app. It must be a server component that calls `getServerSession()`, generates a `WorkerSession` token, saves the hashed token to DB, and redirects to `autoreach-worker://auth?token=<token>`. The page shown before the redirect should say "Connecting your desktop app..."
-
-`/download` page — Fetch available installer versions from a static manifest file at `/var/www/autoreach/public/downloads/manifest.json` (written by the worker CI after each release). Show download buttons for Windows, macOS, Linux. Show the pairing instructions.
-
-Settings page — Fields for Groq API key, Resend API key, From email, Sender name, Google Maps API key. Show saved values masked (show last 4 characters). On save, POST to `/api/dashboard/settings`. The server encrypts before storing.
-
-Remove all environment variable references to Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`). Add `NEXT_PUBLIC_API_URL=https://leads.creativecomet.tn/api`.
-
-### 5.4 worker/ — Changes Required
-
-**What exists and works:** Electron shell, IPC bridge, `window.autoreach` preload, `IdleState` / `ScrapingState` / `LiveFeed` components, Playwright integration skeleton, CI for Win/Mac/Linux builds.
-
-**What must change:**
-
-The main `BrowserWindow` must call `win.loadURL('https://leads.creativecomet.tn')` instead of loading a bundled HTML file. The preload script (`preload.ts`) must inject `window.autoreach` into the loaded page using `contextBridge.exposeInMainWorld`. This is already the pattern in the existing preload — it just needs the URL changed.
-
-The tray popup (the small panel showing `IdleState` / `ScrapingState`) keeps its bundled React build. This is a separate `BrowserWindow` that is narrow and frameless. It calls `win.loadFile(...)` for the bundled tray HTML. Only this window is bundled.
-
-Register `autoreach-worker://` as a custom protocol in `main.ts` using `protocol.handle`. When Electron intercepts a URL matching this scheme, extract the token from query params and store it securely using `safeStorage.encryptString` (Electron's built-in OS keychain wrapper). On subsequent launches, read the token with `safeStorage.decryptString`.
-
-All worker API calls must include `Authorization: Bearer <stored-jwt>` and `X-Worker-Token: <WORKER_SECRET>`. The `WORKER_SECRET` is injected at build time via the `define` option in `electron-builder` config (it reads the value from a CI secret).
-
-`API_BASE_URL` is changed to `https://leads.creativecomet.tn/api` in the Electron build config and in `worker-release.yml`.
-
-The Playwright scraper in `main.ts` must POST to `POST /api/worker/scrape/jobs` at start, POST each lead to `POST /api/worker/lead` as found, PATCH with email when discovered, POST reviews when collected, and PATCH the job status on completion or cancellation.
-
-### 5.5 docker-compose.yml — Full Replacement
-
-The current file must be completely replaced with one that defines postgres, api, dashboard, and nginx services as described in Section 3.2. Key details:
-
-All services share a single `autoreach_net` bridge network. Postgres is on the network with hostname `postgres`. The api service environment includes `DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}`. Both api and dashboard read shared secrets (`NEXTAUTH_SECRET`) from the root `.env` file. Nginx mounts `./nginx/autoreach.conf`, `./certbot/conf`, and `./certbot/www`. Nginx depends on api and dashboard. Restart policy is `unless-stopped` for all services.
-
-### 5.6 nginx/autoreach.conf
-
-Server block for port 80: only serves the Certbot ACME challenge path (`/.well-known/acme-challenge/`), redirects everything else to HTTPS.
-
-Server block for port 443: SSL cert from Certbot. `proxy_set_header Host $host`, `proxy_set_header X-Real-IP $remote_addr`, `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`, `proxy_set_header X-Forwarded-Proto $scheme`.
-
-Location `/api/dashboard/stream`: `proxy_buffering off`, `proxy_cache off`, `add_header X-Accel-Buffering no`, `proxy_read_timeout 3600s`, `proxy_pass http://api:3070`.
-
-Location `/api/`: `proxy_pass http://api:3070`, `proxy_http_version 1.1`, `proxy_set_header Connection ""`.
-
-Location `/downloads/`: `alias /var/www/autoreach/public/downloads/`, `autoindex off`.
-
-Location `/`: `proxy_pass http://dashboard:3040`.
-
-`client_max_body_size 20m` for CSV imports.
-
-### 5.7 deploy.sh — Full Replacement
-
-The new deploy script:
-
-1. `cd /var/www/autoreach && git pull origin main`
-2. `docker-compose build --no-cache api dashboard` (skip postgres and nginx)
-3. `docker-compose up -d --no-deps api dashboard` (recreate only changed containers, leave postgres and nginx running)
-4. Wait 5 seconds for Node to start
-5. `docker-compose exec api npx prisma migrate deploy` (apply any new DB migrations)
-6. `curl -sf https://leads.creativecomet.tn/api/health && echo "API OK" || echo "API FAILED"`
-7. `curl -sf https://leads.creativecomet.tn && echo "Dashboard OK" || echo "Dashboard FAILED"`
-
-SSL renewal is a separate cron job running as root: `0 12 * * * certbot renew --quiet && docker-compose -f /var/www/autoreach/docker-compose.yml exec nginx nginx -s reload`.
+> **Design principle:** The admin panel must never be reachable by a `USER`-role account under any circumstance, including URL guessing. All admin routes must perform a server-side role check on every request, not just at the layout level.
 
 ---
 
-## 6. The Electron Scraping Flow in Detail
+## 4. Critical Gap #2 — Desktop OAuth Token Sync
 
-When the user clicks "Start Scraping" in the tray popup:
+### 4.1 The current problem
 
-1. Renderer calls `window.autoreach.startScraping({ city, businessType, maxResults, scrapeReviews })`.
-2. Preload forwards to `main.ts` via `ipcMain.handle('scrape:start')`.
-3. `main.ts` calls `POST /api/worker/scrape/jobs`. API creates `ScrapeJob` row with `status: 'running'`, returns `jobId`.
-4. `main.ts` launches Playwright Chromium headless. Navigates Google Maps search.
-5. For each business found:
-   - Sends `ipcRenderer.send('scrape:lead-found', leadData)` to update the tray UI progress.
-   - POSTs to `POST /api/worker/lead` with `{ ...leadData, jobId }`.
-   - API saves the Business row and fires an SSE event to the user's open web dashboard tabs.
-6. If `scrapeReviews` is true: after extracting business data, Playwright fetches reviews. POSTs to `POST /api/worker/lead/:leadId/reviews`.
-7. For email scraping: lightweight HTTP crawl of the business website checking homepage, `/contact`, `/contact-us`, `/about`. Found email is PATCHed to `PATCH /api/worker/lead/:leadId/email`. API fires another SSE event with the updated lead.
-8. On completion: `PATCH /api/worker/scrape/jobs/:jobId` with `status: 'completed'`. API sends SSE job completion event.
-9. `main.ts` sends `ipcRenderer.send('scrape:complete', { collected, synced })` to update the tray UI.
+The Electron desktop worker currently requires the user to manually paste a token into the app to authenticate. This is a severe UX regression compared to every industry-standard desktop SaaS application. A user who has already authenticated on the web should **never** need to touch a token string. This pattern is not acceptable in a professional product.
 
-**CAPTCHA handling:** Playwright watches for known CAPTCHA selectors or the URL changing to a verification page. On detection: `main.ts` sends `ipcRenderer.send('scrape:captcha')`. Tray UI shows the CAPTCHA alert card. User clicks "Resume" → preload calls `ipcMain.handle('scrape:resume')` → `main.ts` shows the Playwright browser window with `win.show()`. User solves CAPTCHA. Playwright watches for URL change back to Maps. On success: `main.ts` hides the browser window and continues the loop.
+### 4.2 How leading apps handle this
 
-**Pause/Resume:** Playwright can be paused by setting a module-level `isPaused` flag in `main.ts` and checking it in the scraping loop with a `while(isPaused) await sleep(500)` guard.
+| App | Mechanism |
+|---|---|
+| **Figma** | Clicking "Open in Desktop" triggers `figma://` deep link. Desktop receives a short-lived code, exchanges it silently, opens the file. |
+| **Linear** | OAuth completes in browser, redirects to `linear://auth?code=...`. Desktop is already listening via registered protocol. |
+| **Notion / Slack** | Browser redirects to `notion://` or `slack://` with auth payload. Native app receives it via OS protocol registration and establishes session instantly. |
 
----
+The standard is: **the user authenticates once in the browser, the desktop detects it automatically, and the session appears without any manual step.**
 
-## 7. Features That Must Be Built From Scratch
+### 4.3 The correct architecture
 
-### 7.1 Encrypted Settings Storage
+#### Step 1 — Custom protocol registration
 
-Before any settings routes are written for the Node API, create an `encryption.ts` utility using Node's built-in `crypto` module with AES-256-GCM. `encrypt(plaintext, key)` returns `{ iv, ciphertext, authTag }` joined as a base64 string. `decrypt(ciphertext, key)` reverses it. The `ENCRYPTION_KEY` env var is the 32-byte hex key. `groqApiKeyEncrypted`, `resendApiKeyEncrypted`, `googleMapsApiKeyEncrypted` in the Settings model store the encrypted ciphertext. On every use, the API decrypts in memory and never logs the plaintext.
+The Electron app registers a custom URL scheme with the operating system during installation: `autoreach://`.
 
-### 7.2 Worker Health Beacon
+- **Windows:** registry entry under `HKEY_CLASSES_ROOT`
+- **macOS:** declared in `Info.plist` as a URL type
+- **Linux:** `.desktop` file registered with `xdg-mime`
 
-The desktop worker pings `POST /api/worker/heartbeat` every 60 seconds while the app is open. This updates `WorkerSession.lastSeenAt`. The dashboard's scrape page and the `/download` page check `GET /api/worker/status` and show "Worker online" or "Worker offline — last seen X minutes ago."
+Once registered, any link starting with `autoreach://` clicked anywhere on that machine causes the OS to open the desktop app and pass the URL as a launch argument.
 
-### 7.3 Reply Detection via Resend Webhook
+#### Step 2 — Web triggers the deep link
 
-The CLI's `check_for_replies` function checked IMAP. The Node API equivalent uses Resend webhooks instead. Configure a Resend webhook pointing to `POST /api/webhooks/resend`. Resend signs webhook payloads — validate the `Resend-Signature` header using the webhook signing secret from `.env`. When a `email.bounced`, `email.complained`, or a custom reply event arrives, find the Business row by the recipient email, update stage, cancel pending follow-ups.
+After a successful OAuth login on the web dashboard, the web app checks whether the user arrived from a desktop-initiated auth request. This is detected via a query parameter embedded by the desktop when it opens the browser:
 
-### 7.4 The /download Page with Release Manifest
-
-The worker CI (after a successful build and GitHub Release) copies the installer files to `/var/www/autoreach/public/downloads/` on the VPS via SCP and writes a `manifest.json` file: `{ "version": "1.2.3", "windows": "/downloads/AutoReach-1.2.3.exe", "macos": "/downloads/AutoReach-1.2.3.dmg", "linux": "/downloads/AutoReach-1.2.3.AppImage", "releasedAt": "2026-06-20T..." }`. The `/download` Next.js page fetches this manifest at request time and shows the correct download links.
-
-### 7.5 Arabic Email Generation
-
-The dashboard outreach page already shows Arabic in the language dropdown. The Node API's email generation function needs a third language case. The Arabic prompt follows the same structure as English: address the business by name, write as a person, sign off with the sender name, under 120 words, return only the body. Test with `llama-3.1-8b-instant` which handles Arabic well. The subject line template for Arabic uses right-to-left text.
-
-### 7.6 ARIA Chatbot on Node API
-
-The ARIA chatbot in `app.py` is implemented as `POST /api/aria`. Port this route to the Node API as `POST /api/dashboard/aria`. Fetch the user's `groqApiKeyEncrypted` from Settings, decrypt it, use it to call Groq. The jailbreak keyword filter, the language detection, and the system prompt all port directly. The security rules and identity rules in the system prompt should be kept verbatim.
-
----
-
-## 8. CI/CD — What Changes
-
-### 8.1 dashboard-ci.yml
-
-Remove the Vercel deployment step entirely. Replace with:
-
-```yaml
-- name: Deploy to VPS
-  uses: appleboy/ssh-action@v1.0.3
-  with:
-    host: ${{ secrets.VPS_HOST }}
-    username: ${{ secrets.VPS_USER }}
-    key: ${{ secrets.VPS_SSH_KEY }}
-    script: bash /var/www/autoreach/deploy.sh
+```
+https://app.autoreach.io/login?source=desktop&device_id=DEVICE_UUID
 ```
 
-TypeCheck and build steps remain for CI validation.
+If `source=desktop` is present, the web app — after session creation — generates a **short-lived, single-use authorization code** (not the full session token) and redirects the browser to:
 
-### 8.2 api-ci.yml
+```
+autoreach://auth?code=XXXX
+```
 
-Same pattern: replace the Railway deploy step with the SSH action calling `deploy.sh`.
+The browser does not handle this URL. The OS intercepts it and passes it to the Electron app.
 
-### 8.3 worker-release.yml
+#### Step 3 — Desktop receives and exchanges the code
 
-Keep the three build jobs (Windows, macOS, Linux). Make these changes:
+The Electron main process listens for:
+- The `second-instance` event (Windows/Linux, when the OS re-launches the app)
+- The `open-url` event (macOS)
 
-- Add `API_BASE_URL: https://leads.creativecomet.tn/api` to all three build env sections.
-- Add `WORKER_SECRET: ${{ secrets.WORKER_SECRET }}` to all three build env sections.
-- After the GitHub Release creation step, add an SCP step that uploads the built installers to `/var/www/autoreach/public/downloads/` on the VPS.
-- Add a step that writes `manifest.json` to the VPS with the new version and download paths.
+When the OS delivers the `autoreach://auth?code=XXXX` URL, the main process extracts the code and makes a **server-side POST request** to a dedicated `/api/desktop/exchange` endpoint on the AutoReach API.
+
+The API:
+1. Validates the code exists and has not expired (60-second TTL)
+2. Validates the code is tied to the `device_id` that initiated the request
+3. Marks the code as used (single-use)
+4. Returns a long-lived session token (JWT or opaque token)
+
+The session token is stored in the **OS keychain** via the `keytar` library — never in `electron-store`, `localStorage`, or a plain config file.
+
+#### Step 4 — Polling fallback
+
+For the edge case where the user authenticates in a browser on a different machine (e.g., their phone), the desktop app polls `/api/desktop/pending-auth` every 3 seconds while in the unauthenticated state.
+
+- The desktop sends its `device_id` with each poll
+- When the server detects a successfully redeemed code for that `device_id`, it returns the session token
+- Polling stops immediately once a session is established
+
+#### Step 5 — The "Sign In" button
+
+Instead of a token input field, the unauthenticated desktop UI shows a single **"Sign In with Browser"** button. Clicking it:
+
+1. Generates a local `device_id` (UUID stored in the OS keychain, created once at install time)
+2. Opens the user's default browser to `https://app.autoreach.io/login?source=desktop&device_id=DEVICE_UUID`
+3. Starts the polling loop in the background
+4. Waits — either for the deep link callback or for the poll to return a session
+
+The user completes OAuth in their browser. The desktop transitions to the authenticated state automatically. **The user never sees a token.**
+
+> **Security constraints for the token exchange:**
+> - The authorization code must be single-use and expire after 60 seconds
+> - The code must be cryptographically tied to the `device_id` that initiated the request — a code cannot be redeemed by a different device
+> - The final session token must be stored in the OS keychain (`keytar`), not in any plain file
+> - The `/api/desktop/exchange` endpoint must be rate-limited to 5 attempts per device per minute
+> - The `device_id` is generated once at install time and is stable across app restarts — it is not the same as a session token
 
 ---
 
-## 9. Implementation Order
+## 5. Reliability, Observability & Infrastructure
 
-### Phase 1 — VPS Foundation
-Point `leads.creativecomet.tn` DNS A record to the VPS IP. Install Docker and Docker Compose on the VPS. Clone the repo to `/var/www/autoreach`. Create the `.env` file with all secrets. Write the Nginx config. Run Certbot once to obtain the SSL certificate. Start only the postgres container and verify it accepts connections.
+### 5.1 Structured logging
 
-### Phase 2 — Database
-Write the complete Prisma schema. Run `prisma migrate dev` locally to generate the migration. Commit the migration file. Start the api container with postgres. Verify `https://leads.creativecomet.tn/api/health` returns 200.
+The current codebase uses `console.log` throughout. A production SaaS requires structured logging. Every request to the API should emit a JSON log line containing: request ID, HTTP method, path, status code, response duration, user ID (if authenticated), and any error stack trace.
 
-### Phase 3 — Auth
-Configure NextAuth providers (GitHub, Google, credentials). Set up OAuth apps with the correct callback URLs pointing to `leads.creativecomet.tn`. Verify sign-in works end-to-end. Verify the `User` table populates on first login.
+Logs should be written to stdout in JSON format (compatible with log aggregation tools like Datadog, Loki, or CloudWatch). At minimum for self-hosted setups, logs should be written to rotating files that can be tailed in production without losing data on container restart.
 
-### Phase 4 — Core API Routes
-Implement all dashboard-facing CRUD: leads, stage updates, settings (with encryption), export CSV, import CSV, outreach send (using stored Resend key), follow-up management, ARIA chatbot. Test each from the dashboard UI.
+### 5.2 Error boundaries
 
-### Phase 5 — SSE
-Implement the SSE endpoint and the in-process SSE map. Test with `curl -N` from the terminal. Then implement the `useLeadStream()` hook in the dashboard and verify events appear in the React UI without a page refresh.
+The Next.js dashboard has no global React error boundary. If any component throws an unhandled exception, the user sees a blank white screen with no recovery path. A professional application must:
 
-### Phase 6 — Worker Auth Pairing
-Implement `/connect-worker` page and `WorkerSession` generation. Register `autoreach-worker://` protocol in Electron. Test the full pairing flow: open the page in a real browser, authenticate, verify the Electron app receives the token.
+- Wrap the entire app in a React error boundary
+- Show a friendly error page with a "Reload" button when an unhandled error occurs
+- Optionally report the error to an error tracking service (e.g., Sentry) with the user ID and the component stack trace
 
-### Phase 7 — Electron Main Window Switch
-Change the Electron main `BrowserWindow` to load `https://leads.creativecomet.tn`. Verify the `window.autoreach` preload bridge injects correctly. Verify the tray popup still works from its bundled build. Test the full scrape → API push → SSE → web dashboard flow locally.
+### 5.3 API rate limiting
 
-### Phase 8 — Cron and Follow-ups
-Implement the idempotent follow-up cron with the atomic status transition. Configure the Resend webhook. Test follow-up scheduling end to end with a manually accelerated due date.
+The Express API has no rate limiting. A single client can flood any endpoint without consequence. The following limits must be enforced:
 
-### Phase 9 — CI/CD
-Update all three workflow files. Set GitHub Actions secrets. Push to main, verify the deploy completes successfully, and the site is live.
+- **Unauthenticated requests to `/api/auth/*`:** 20 requests per IP per minute
+- **Scraping session start (`POST /api/sessions`):** 5 per user per hour — prevents abuse of the scraping infrastructure
+- **`/api/desktop/exchange`:** 5 per device per minute
+- **General authenticated endpoints:** 120 requests per user per minute
 
-### Phase 10 — Full Production Verification
-Run the complete user journey on the live VPS: sign up → connect desktop worker → scrape Google Maps → watch leads appear in the browser in real time via SSE → scrape emails → run outreach campaign → verify follow-up is scheduled → manually mark a lead as Replied → verify follow-up cancels.
+When a limit is exceeded, the API must return `429 Too Many Requests` with a `Retry-After` header.
+
+### 5.4 Worker crash recovery
+
+The Electron worker can crash mid-scrape with no recovery mechanism. Two improvements are required:
+
+**Session interruption tracking:** When the worker process exits unexpectedly during an active session, the API should detect the connection drop and mark that session as `interrupted` in the database. The user can then resume it from the desktop UI rather than starting from scratch.
+
+**Internal browser process auto-restart:** If the Playwright-controlled browser crashes without the user stopping the session, the worker should automatically relaunch the browser, restore its state, and continue the session — without requiring the user to reopen the app.
+
+### 5.5 Database connection pooling
+
+In production, each Docker container opens its own connection pool directly against PostgreSQL. Under load (multiple concurrent scraping sessions syncing leads), this can exhaust `max_connections`. PgBouncer should sit between the application containers and PostgreSQL as a connection multiplexer. This is especially important as concurrent worker count grows.
+
+### 5.6 Health checks (complete implementation)
+
+The `/api/health` endpoint exists in the deploy script but its depth is unclear. A complete health check must verify:
+
+- **Database:** a `SELECT 1` completes within 500ms
+- **Disk space:** the database volume has more than 10% free space
+- **Queue depth:** the worker sync queue is not backed up beyond a configurable threshold (e.g., 500 pending items)
+
+The response must be a structured JSON object with per-component statuses, not just `200 OK`. Example shape:
+
+```json
+{
+  "status": "ok",
+  "db": "ok",
+  "disk": "ok",
+  "queue": "ok",
+  "uptime": 432190
+}
+```
+
+If any component is degraded, the overall `status` is `degraded` and the HTTP status code is `503`.
 
 ---
 
-## 10. What Must Not Change
+## 6. Security Hardening
 
-**The visual design.** Teal `#4ecdc4` and coral `#e8806a` on dark `#0a1414` / `#0d1a1a`. The Radix UI components. The Tailwind setup. The font and spacing. The pipeline stages. The `ScrapingState` progress bar and live feed. All of this is already correct.
+### 6.1 CSRF protection
 
-**The email templates.** Classic, clean, purple, warm, plain. The HTML in `app.py`'s `_build_email_html` function is production-ready. Port it verbatim as a TypeScript function in `api/src/services/emailTemplates.ts`. Do not redesign the templates.
+All state-mutating API endpoints (`POST`, `PUT`, `DELETE`, `PATCH`) that accept session cookies must validate a CSRF token. NextAuth provides CSRF protection for its own endpoints, but any custom Express API endpoint that reads cookies is unprotected.
 
-**The follow-up logic.** Three steps at +3, +7, +14 days. Stops on unsubscribe or reply. Per-step enable/disable toggles in settings. This is correct and just needs to run in the Node cron.
+The recommended approach is the **double-submit cookie pattern**: the server sets a `csrf-token` cookie on login; every mutating request must include a matching `X-CSRF-Token` header; the server compares both values. Requests without a matching token are rejected with `403`.
 
-**The ARIA chatbot system prompt.** The jailbreak defenses, the scope restriction, the language detection, the identity rules — all of this is carefully written. Port it verbatim. The only change is that ARIA now uses the server-side decrypted Groq key instead of accepting a key from the client.
+### 6.2 Input validation
 
-**The scraping UI.** `IdleState`, `ScrapingState`, `LiveFeed`, CAPTCHA alert, pause/stop controls. These move to the tray popup BrowserWindow and stay exactly as designed.
+API endpoints accept user-supplied data (city, businessType, maxResults, etc.) without exhaustive server-side validation. Every input must be parsed through a schema validator before it reaches business logic or the database.
+
+Validation must cover:
+- Type correctness (string, number, boolean)
+- Length bounds (city name max 100 chars, maxResults between 1 and 500)
+- Allowed characters (no shell metacharacters in text inputs)
+- Enum constraints where applicable (e.g., export format must be `csv` or `xlsx`)
+
+Invalid inputs must return `400 Bad Request` with a structured error body describing which field failed and why.
+
+### 6.3 Secrets management
+
+The `.env` file in the repository contains real credentials: GitHub OAuth, Google OAuth, GROQ API key, encryption keys, and the worker secret. **These must never be committed to version control.**
+
+In production, secrets must be injected via environment variables from a secrets manager. A documented rotation procedure must exist describing: how often each secret rotates, who can rotate it, and how to rotate without downtime (i.e., supporting both old and new values during a rolling deploy).
+
+### 6.4 Security headers
+
+The Next.js app does not configure HTTP security headers. The following must be added to every response:
+
+| Header | Value |
+|---|---|
+| `Content-Security-Policy` | Restrictive policy allowing only trusted origins |
+| `X-Frame-Options` | `DENY` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains` |
+
+These are first-line defenses against XSS, clickjacking, and MIME sniffing attacks and should be applied at the Nginx layer or in Next.js middleware.
+
+### 6.5 Dependency auditing
+
+There is no automated dependency audit in the CI/CD pipeline. `npm audit` must run as part of every build. Known high-severity or critical vulnerabilities must block the deployment. A tool such as Dependabot or Renovate should be configured to automatically open pull requests for dependency updates, keeping the dependency graph current without manual effort.
+
+---
+
+## 7. User Experience Completeness
+
+### 7.1 First-run onboarding checklist
+
+A new user who signs in lands on the dashboard with no guidance. Since there is no email onboarding (out of scope), the in-app experience must compensate. A first-run checklist should appear the first time a user logs in, guiding them through:
+
+1. Downloading and installing the desktop worker
+2. Opening the worker and clicking "Sign In with Browser"
+3. Confirming the worker is connected (green status indicator on the web dashboard)
+4. Running their first scrape
+
+The checklist persists in a collapsed state in the sidebar until all steps are complete, then disappears. Progress is tracked per-user in the database (`onboardingCompletedAt` or a step bitmask).
+
+### 7.2 Desktop app download page
+
+There is no `/download` page. Users must somehow know to look for the desktop installer. The download page must:
+
+- Detect the user's operating system via the `User-Agent` header and prominently feature the correct installer
+- Provide download links for all three platforms (Windows `.exe`, macOS `.dmg`, Linux `.AppImage`)
+- Display a SHA-256 checksum for each installer so security-conscious users can verify integrity
+- Show the current version number and a brief changelog summary
+
+### 7.3 Empty states
+
+Every list or data view must have a designed empty state. Currently, the leads table, sessions list, and exports page show nothing meaningful when empty. Each empty state must include:
+
+- A relevant icon or simple illustration
+- A one-sentence explanation of what this section is for
+- A primary action button (e.g., "Start your first scrape" on the leads table)
+
+### 7.4 Real-time scraping progress on the web
+
+Scraping progress is visible only in the Electron desktop UI. The web dashboard shows no live feedback while a scrape is running. The API already maintains session state. The dashboard should use **polling or Server-Sent Events** to display a live progress bar, lead count, and status message for any in-progress session, allowing users to monitor from the web without keeping the desktop app visible.
+
+### 7.5 Lead management improvements
+
+**Lead detail panel** — clicking a lead row should open a side panel or modal with full details: address, phone, website, rating, review count, business category, and a link to the original Google Maps listing.
+
+**Deduplication indicator** — when a lead already exists in the user's library from a previous session, it should be visually flagged (e.g., a subtle badge) rather than silently re-imported. The user can choose to update the existing record or skip.
+
+**Bulk operations** — the leads table needs working multi-select enabling: bulk export, bulk delete, and bulk tag assignment.
+
+**Column customization** — users should be able to show/hide columns in the leads table and have their preference persisted.
+
+### 7.6 Desktop auto-update
+
+The Electron app has no auto-update mechanism. Users who download version 1.0 are stuck on it forever unless they manually re-download. `electron-updater` integrated with a GitHub Releases endpoint must be configured so the app:
+
+- Checks for updates on each launch
+- Downloads the update in the background without interrupting the user
+- Shows a non-blocking notification: "An update is ready — restart to apply"
+- Applies the update on the next restart
+
+---
+
+## 8. Legal & Compliance
+
+Even without billing, AutoReach collects, processes, and stores personal business data (names, phone numbers, addresses, websites). This carries legal obligations, especially under GDPR if serving European users.
+
+### 8.1 Required pages
+
+**Terms of Service** — defines what the service does, acceptable use policy (especially regarding scraping and data usage), limitation of liability, and governing jurisdiction. Must be linked from the login page and the app footer.
+
+**Privacy Policy** — explains: what data is collected (OAuth identity, scraped lead data), how it is used, how long it is retained, and the user's rights (access, correction, deletion). Must be GDPR-compliant if serving EU users.
+
+### 8.2 Data deletion
+
+Users must be able to request deletion of their account and all associated data (leads, sessions, exports). Even though there is no billing, this is a legal requirement under GDPR Article 17.
+
+The deletion flow must:
+- Be accessible from the user's account settings page
+- Require a confirmation step (type "DELETE" or confirm via a modal)
+- Cascade-delete all associated records in the database
+- Complete within 30 days (can be a soft-delete immediately followed by a background purge job)
+- **Not** send a confirmation email (out of scope) — but must show an in-app confirmation immediately after the request is submitted
+
+### 8.3 Data retention policy
+
+Scraped lead data that belongs to deleted accounts must not be retained indefinitely. A documented internal policy must specify the maximum retention period (e.g., 30 days after account deletion) after which data is permanently and irrecoverably purged from the database and all backups.
+
+---
+
+## 9. Implementation Roadmap
+
+Ordered by user-facing impact and technical dependency. Billing, email, and verification items are absent — they are out of scope for this phase of the product.
+
+| Phase | Focus | Outcome |
+|---|---|---|
+| **Phase 1** | RBAC + Admin Panel + Desktop Token Sync | Product is internally manageable; desktop UX matches industry standard |
+| **Phase 2** | Rate limiting + CSRF + Input validation + Structured logging | Product is protected from abuse and operationally observable |
+| **Phase 3** | Error boundaries + Worker crash recovery + Health check completeness + PgBouncer | Product is resilient and its health is measurable |
+| **Phase 4** | Empty states + Real-time web progress + Lead detail panel + Bulk operations + Download page + Desktop auto-update + Onboarding checklist | Product feels complete and polished to a new user |
+| **Phase 5** | Terms of Service + Privacy Policy + Data deletion flow + Security headers + Dependency auditing | Product is legally compliant and hardened |
+
+---
+
+## 10. Appendix — What is Already Working
+
+The following capabilities are confirmed present in the codebase and are **not** gaps requiring action.
+
+- Core Electron desktop app with Playwright-powered Google Maps scraping
+- Lead sync from desktop worker to API via authenticated HTTP
+- PostgreSQL database with Prisma ORM and migration support
+- NextAuth OAuth login (GitHub + Google) — authentication works; authorization does not exist yet
+- Docker Compose production stack with Nginx reverse proxy
+- GitHub Actions CI/CD pipeline with automated deploy script
+- Basic leads table in the dashboard with CSV export
+- Session management in the Electron app (start, pause, stop, resume)
+- CAPTCHA detection and manual resume flow in the desktop UI
+- Encrypted storage of worker tokens on disk
+- Groq AI integration for lead enrichment and email generation
+- Worker auto-connect with stored token on app reopen
+
+---
+
+*AutoReach SaaS Completion Blueprint — End of Document*

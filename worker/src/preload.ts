@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('autoreach', {
   // Auth
+  startBrowserAuth: ()               => ipcRenderer.invoke('start-browser-auth'),
   connectWorker:  (token: string)  => ipcRenderer.invoke('connect-worker', token),
   clearToken:     ()               => ipcRenderer.invoke('clear-token'),
   getConfig:      ()               => ipcRenderer.invoke('get-config'),

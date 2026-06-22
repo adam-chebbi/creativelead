@@ -54,19 +54,32 @@ model VerificationToken {
 }
 
 // ─────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+// ─────────────────────────────────────────────────────────────
 // USER
 // ─────────────────────────────────────────────────────────────
 model User {
-  id            String    @id @default(uuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime? @map("email_verified")
-  image         String?
-  passwordHash  String?   @map("password_hash")
-  plan          String    @default("free")
-  workerToken   String?   @unique @map("worker_token")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  id              String    @id @default(uuid())
+  name            String?
+  email           String?   @unique
+  emailVerified   DateTime? @map("email_verified")
+  image           String?
+  passwordHash    String?   @map("password_hash")
+  plan            String    @default("free")
+  workerToken     String?   @unique @map("worker_token")
+  role            UserRole  @default(USER)
+  suspended       Boolean   @default(false)
+  lastActiveAt    DateTime? @map("last_active_at")
+  onboardingStep  Int       @default(0) @map("onboarding_step")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   accounts         Account[]
   sessions         Session[]
@@ -77,9 +90,61 @@ model User {
   scrapingSessions ScrapingSession[]
   workerSessions   WorkerSession[]
   scrapingJobs     ScrapingJob[]
+  auditLogsActed   AuditLog[] @relation("AuditActor")
 
   @@map("users")
 }
+
+// ─────────────────────────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────────────────────────
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorId     String   @map("actor_id")
+  actorEmail  String   @map("actor_email")
+  targetId    String?  @map("target_id")
+  action      String
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor User @relation("AuditActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────────
+// FEATURE FLAG
+// ─────────────────────────────────────────────────────────────
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  enabled     Boolean  @default(false)
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("feature_flags")
+}
+
+// ─────────────────────────────────────────────────────────────
+// DESKTOP AUTH CODE
+// ─────────────────────────────────────────────────────────────
+model DesktopAuthCode {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  deviceId  String    @map("device_id")
+  userId    String?   @map("user_id")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([deviceId])
+  @@index([code])
+  @@map("desktop_auth_codes")
+}
+
+
 
 // ─────────────────────────────────────────────────────────────
 // USER SETTINGS

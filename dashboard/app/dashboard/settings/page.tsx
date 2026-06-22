@@ -1,7 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getSettings, updateSettings, regenerateToken, createJob, deleteJob, getWorkerToken } from '@/lib/api';
+import { getSettings, updateSettings, regenerateToken, createJob, deleteJob, getWorkerToken, deleteAccount } from '@/lib/api';
+import { signOut } from 'next-auth/react';
 import { Check, AlertTriangle } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -12,6 +13,8 @@ export default function SettingsPage() {
   const [showToken, setShowToken] = useState(false);
   const [token, setToken]   = useState('');
   const [regenWarning, setRegenWarning] = useState(false);
+  const [deleteWarning, setDeleteWarning] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [jobCity, setJobCity]   = useState('');
   const [jobType, setJobType]   = useState('');
   const [jobMax, setJobMax]     = useState(200);
@@ -50,6 +53,18 @@ export default function SettingsPage() {
   const handleDeleteJob = async (id: string) => {
     await deleteJob(id);
     setJobs(prev => prev.filter(j => j.id !== id));
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      await signOut({ callbackUrl: '/' });
+    } catch (err) {
+      setDeleting(false);
+      setDeleteWarning(false);
+      alert('Failed to delete account. Please try again.');
+    }
   };
 
   const field = (key: string, label: React.ReactNode, type = 'text', placeholder = '') => (
@@ -166,7 +181,7 @@ export default function SettingsPage() {
       </button>
 
       {/* Worker Token */}
-      <div className="p-6 rounded-xl border" style={{ background: '#0d1a1a', borderColor: '#1e3232' }}>
+      <div className="p-6 rounded-xl border mb-8" style={{ background: '#0d1a1a', borderColor: '#1e3232' }}>
         <h2 className="text-white font-semibold mb-2">Worker Token</h2>
         <p className="text-xs text-[#6a9090] mb-4">This token authenticates your desktop worker. Keep it secret.</p>
         {showToken ? (
@@ -183,15 +198,42 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Regen confirm */}
+      {/* Account Deletion */}
+      <div className="p-6 rounded-xl border border-red-500/20 mb-8" style={{ background: '#0d1a1a' }}>
+        <h2 className="text-red-400 font-semibold mb-2 flex items-center gap-2"><AlertTriangle className="w-5 h-5" /> Danger Zone</h2>
+        <p className="text-xs text-[#6a9090] mb-4">Deleting your account is permanent. All your data, leads, settings, and connected integrations will be immediately and irreversibly deleted. Active workers will be disconnected.</p>
+        <button onClick={() => setDeleteWarning(true)} className="px-4 py-2 rounded-lg text-sm border border-red-500 text-red-500 hover:bg-red-500/10 transition-colors">
+          Delete Account
+        </button>
+      </div>
+
+    {/* Regen confirm */}
       {regenWarning && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="p-8 rounded-2xl border max-w-sm w-full mx-4" style={{ background: '#0d1a1a', borderColor: '#1e3232' }}>
             <h3 className="text-white font-bold text-lg mb-3">Regenerate Token?</h3>
             <p className="text-[#6a9090] text-sm mb-6">All connected workers will be disconnected immediately. You will need to paste the new token into each worker.</p>
             <div className="flex gap-3">
-              <button onClick={handleRegen} className="flex-1 py-3 rounded-lg font-semibold text-white" style={{ background: '#e8806a' }}>Regenerate</button>
-              <button onClick={() => setRegenWarning(false)} className="flex-1 py-3 rounded-lg text-[#6a9090] border border-[#1e3232]">Cancel</button>
+               <button onClick={handleRegen} className="flex-1 py-3 rounded-lg font-semibold text-white" style={{ background: '#e8806a' }}>Regenerate</button>
+               <button onClick={() => setRegenWarning(false)} className="flex-1 py-3 rounded-lg text-[#6a9090] border border-[#1e3232]">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account confirm */}
+      {deleteWarning && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="p-8 rounded-2xl border border-red-500/20 max-w-sm w-full mx-4" style={{ background: '#0d1a1a' }}>
+            <h3 className="text-red-400 font-bold text-lg mb-3 flex items-center gap-2"><AlertTriangle className="w-5 h-5" /> Delete Account?</h3>
+            <p className="text-[#6a9090] text-sm mb-6">This action cannot be undone. All your leads and settings will be permanently destroyed.</p>
+            <div className="flex gap-3">
+              <button onClick={handleDeleteAccount} disabled={deleting} className="flex-1 py-3 rounded-lg font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50">
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+              <button onClick={() => setDeleteWarning(false)} disabled={deleting} className="flex-1 py-3 rounded-lg text-[#6a9090] border border-[#1e3232] hover:text-white transition-colors disabled:opacity-50">
+                Cancel
+              </button>
             </div>
           </div>
         </div>

@@ -11,12 +11,16 @@ import { resendWebhookRouter } from './routes/webhooks/resend';
 import { startFollowupCron } from './jobs/followupCron';
 import { prisma } from './lib/prisma';
 
+import { logger } from './lib/logger';
+
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
 // ── Security & Middleware ─────────────────────────────────────
 app.use(helmet());
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', {
+  stream: { write: (message) => logger.info(message.trim(), { context: 'http' }) }
+}));
 
 // Webhooks must be mounted before express.json() to preserve the raw body Buffer for signature validation
 app.use('/api/webhooks/resend', express.raw({ type: 'application/json' }), resendWebhookRouter);
@@ -47,10 +51,19 @@ app.use(
 // Strict limit for worker upload endpoints
 const workerUploadLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 120,
+  max: 60, // reduced from 120
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests — slow down the upload rate.' },
+});
+
+// Strict limit for authentication endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // 30 requests per 15 minutes
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts.' },
 });
 
 // General API limiter
@@ -63,11 +76,18 @@ const generalLimiter = rateLimit({
 
 app.use('/api/worker/leads', workerUploadLimiter);
 app.use('/api/worker/lead', workerUploadLimiter);
+app.use('/api/auth', authLimiter); // Apply to any auth routes
 app.use('/api', generalLimiter);
 
 // ── Health Check ──────────────────────────────────────────────
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '2.0.0' });
+app.get('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '2.0.0', db: 'connected' });
+  } catch (err: any) {
+    logger.error('Health check failed', { error: err.message });
+    res.status(503).json({ status: 'error', timestamp: new Date().toISOString(), version: '2.0.0', db: 'disconnected' });
+  }
 });
 
 // ── Routes ────────────────────────────────────────────────────
@@ -82,9 +102,10 @@ app.get('/api/unsubscribe', async (req, res) => {
       where: { email },
       data: { unsubscribed: true, stage: 'Unsubscribed' },
     });
+    logger.info(`Unsubscribed business`, { email });
     res.json({ ok: true });
-  } catch (err) {
-    console.error('[unsubscribe]', err);
+  } catch (err: any) {
+    logger.error('Failed to unsubscribe', { error: err.message, email });
     res.status(500).json({ error: 'Failed to unsubscribe' });
   }
 });
@@ -96,8 +117,7 @@ app.use((_req, res) => {
 
 // ── Global Error Handler ──────────────────────────────────────
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[ERROR]', err.message);
-  if (process.env.NODE_ENV !== 'production') console.error(err.stack);
+  logger.error(err.message, { stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined });
   res.status(500).json({ error: 'Internal server error' });
 });
 

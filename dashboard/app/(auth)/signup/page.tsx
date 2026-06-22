@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 const GoogleIcon = () => (
@@ -14,11 +14,16 @@ const GitHubIcon = () => (
 
 export default function SignupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [name, setName]         = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
+
+  const isDesktop = searchParams.get('source') === 'desktop';
+  const deviceId  = searchParams.get('device_id');
+  const callbackUrl = isDesktop && deviceId ? `/desktop-auth?device_id=${deviceId}` : '/download';
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,7 +35,7 @@ export default function SignupPage() {
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error || 'Signup failed'); setLoading(false); return; }
-    await signIn('credentials', { email, password, callbackUrl: '/download' });
+    await signIn('credentials', { email, password, callbackUrl });
   }
 
   return (
@@ -71,11 +76,11 @@ export default function SignupPage() {
         <div className="flex-1 h-px" style={{ background: '#1e3232' }} />
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <button onClick={() => signIn('google', { callbackUrl: '/download' })}
+        <button onClick={() => signIn('google', { callbackUrl })}
           className="py-3 flex items-center justify-center gap-2 rounded-lg text-sm font-medium text-white border border-[#1e3232] hover:border-[#2a4444] transition-colors">
           <GoogleIcon /> Google
         </button>
-        <button onClick={() => signIn('github', { callbackUrl: '/download' })}
+        <button onClick={() => signIn('github', { callbackUrl })}
           className="py-3 flex items-center justify-center gap-2 rounded-lg text-sm font-medium text-white border border-[#1e3232] hover:border-[#2a4444] transition-colors">
           <GitHubIcon /> GitHub
         </button>

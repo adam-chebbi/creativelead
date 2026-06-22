@@ -55,10 +55,10 @@ function sendToRenderer(channel: string, data?: unknown) {
 // ── Custom Protocol Handler for Auth Pairing ──
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('autoreach-worker', process.execPath, [path.resolve(process.argv[1])]);
+    app.setAsDefaultProtocolClient('autoreach', process.execPath, [path.resolve(process.argv[1])]);
   }
 } else {
-  app.setAsDefaultProtocolClient('autoreach-worker');
+  app.setAsDefaultProtocolClient('autoreach');
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
@@ -81,14 +81,19 @@ app.on('open-url', (event, url) => {
 });
 
 async function handleProtocolUrl(urlStr?: string) {
-  if (!urlStr || !urlStr.startsWith('autoreach-worker://')) return;
+  if (!urlStr || !urlStr.startsWith('autoreach://')) return;
   try {
     const url = new URL(urlStr);
     if (url.hostname === 'auth') {
-      const token = url.searchParams.get('token');
-      if (token) {
-        store.set('workerToken', token);
-        await verifyAndPing();
+      const code = url.searchParams.get('code');
+      if (code) {
+        // Exchange code for token
+        const deviceId = store.get('deviceId');
+        const res = await apiClient.post('/api/desktop/exchange', { code, device_id: deviceId });
+        if (res.data.token) {
+          store.set('workerToken', res.data.token);
+          await verifyAndPing();
+        }
       }
     }
   } catch (e) {
@@ -132,6 +137,40 @@ app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) creat
 
 // ── IPC Handlers ──────────────────────────────────────────────────────────────
 
+ipcMain.handle('start-browser-auth', async () => {
+  try {
+    const deviceId = store.get('deviceId');
+    const dashboardUrl = store.get('apiBaseUrl')?.replace('/api', '') || 'http://localhost:3000';
+    
+    // Initiate the flow on the server
+    await apiClient.get(`/api/desktop/initiate?device_id=${deviceId}`);
+    
+    // Open the browser
+    shell.openExternal(`${dashboardUrl}/login?source=desktop&device_id=${deviceId}`);
+    
+    // Start polling in the background (as fallback for deep link)
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      if (attempts > 30) { clearInterval(poll); return; } // Timeout after 1 minute (every 2s)
+      
+      try {
+        const res = await apiClient.get(`/api/desktop/pending-auth?device_id=${deviceId}`);
+        if (res.data.ready && res.data.token) {
+          clearInterval(poll);
+          store.set('workerToken', res.data.token);
+          await verifyAndPing();
+        }
+      } catch { /* ignore polling errors */ }
+    }, 2000);
+
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// Legacy manual token connection (still useful for debugging/fallback)
 ipcMain.handle('connect-worker', async (_e, token: string) => {
   store.set('workerToken', token.trim());
   try {

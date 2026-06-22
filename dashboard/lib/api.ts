@@ -72,6 +72,9 @@ export const createJob = (data: Record<string, unknown>) =>
 export const deleteJob = (id: string) =>
   api.delete(`/api/dashboard/settings/jobs/${id}`).then((r) => r.data);
 
+export const deleteAccount = () =>
+  api.delete('/api/dashboard/settings/account').then((r) => r.data);
+
 // ── Sessions ──────────────────────────────────────────────────────────────
 export const getSessions = (params?: Record<string, string | number>) =>
   api.get('/api/dashboard/sessions', { params }).then((r) => r.data);

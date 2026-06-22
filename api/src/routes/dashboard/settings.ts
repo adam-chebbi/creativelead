@@ -126,3 +126,15 @@ settingsRouter.delete('/jobs/:id', async (req: Request, res: Response): Promise<
     res.status(500).json({ error: 'Failed to delete job' });
   }
 });
+
+/** DELETE /api/dashboard/settings/account */
+settingsRouter.delete('/account', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Delete user which will cascade delete all associated data (businesses, jobs, settings, etc.)
+    await prisma.user.delete({ where: { id: req.userId } });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[account DELETE]', err);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
+});

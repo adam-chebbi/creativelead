@@ -29,6 +29,26 @@ export function getApiClient(): AxiosInstance {
     return config;
   });
 
+  // Exponential backoff retry interceptor
+  _client.interceptors.response.use(undefined, async (err) => {
+    const config = err.config;
+    if (!config || !config.retryCount) {
+      if (config) config.retryCount = 0;
+    }
+
+    const shouldRetry = err.response && (err.response.status === 429 || err.response.status >= 500);
+
+    if (shouldRetry && config.retryCount < 3) {
+      config.retryCount += 1;
+      const delay = Math.pow(2, config.retryCount) * 1000 + Math.random() * 1000;
+      console.warn(`[API Client] Retrying request to ${config.url} in ${Math.round(delay)}ms (Attempt ${config.retryCount})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return _client!(config);
+    }
+
+    return Promise.reject(err);
+  });
+
   return _client;
 }
 

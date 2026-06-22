@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useLeadStream } from '@/hooks/useLeadStream';
-import { BarChart, Users, GitMerge, Send, TrendingUp, Settings, Download } from 'lucide-react';
+import { BarChart, Users, GitMerge, Send, TrendingUp, Settings, Download, Shield } from 'lucide-react';
 
 const NAV = [
   { href: '/dashboard',          label: 'Overview', icon: BarChart },
@@ -16,11 +16,18 @@ const NAV = [
   { href: '/download',           label: 'Download Worker', icon: Download },
 ];
 
+import { OnboardingChecklist } from '@/components/OnboardingChecklist';
+
+const ROLE_WEIGHT: Record<string, number> = { USER: 1, ADMIN: 2, SUPER_ADMIN: 3 };
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
 
   useLeadStream();
+
+  const isAdmin = ROLE_WEIGHT[(session?.user as any)?.role ?? 'USER'] >= ROLE_WEIGHT.ADMIN;
+  const isImpersonating = (session as any)?.isImpersonating;
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#080f0f' }}>
@@ -51,7 +58,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
             );
           })}
+
+          {/* Admin link — only visible to ADMIN+ */}
+          {isAdmin && (
+            <Link href="/admin"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-[#e8806a] hover:bg-[#1e3232]">
+              <Shield className="w-4 h-4" />
+              Admin Panel
+            </Link>
+          )}
         </nav>
+
+        <OnboardingChecklist />
 
         {/* User */}
         <div className="px-4 py-4 border-t" style={{ borderColor: '#1e3232' }}>
@@ -65,7 +83,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Impersonation banner */}
+        {isImpersonating && (
+          <div className="flex items-center justify-between px-6 py-2 text-sm font-medium shrink-0"
+            style={{ background: '#e8806a', color: '#fff' }}>
+            <span>⚠️ Impersonation session active — you are viewing as another user.</span>
+            <a href="/api/auth/signout" className="underline font-semibold">End Session</a>
+          </div>
+        )}
+        <main className="flex-1 overflow-y-auto">{children}</main>
+      </div>
     </div>
   );
 }

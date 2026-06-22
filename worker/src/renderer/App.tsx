@@ -3,6 +3,7 @@ import ConnectState   from './states/ConnectState';
 import IdleState      from './states/IdleState';
 import ScrapingState  from './states/ScrapingState';
 import CompleteState  from './states/CompleteState';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export type AppState = 'connect' | 'idle' | 'scraping' | 'complete';
 
@@ -79,10 +80,12 @@ export default function App() {
 
       {/* Content */}
       <div className="flex-1">
-        {state === 'connect'  && <ConnectState />}
-        {state === 'idle'     && <IdleState onStarted={handleStarted} />}
-        {state === 'scraping' && <ScrapingState sessionId={sessionId} onStopped={handleStopped} />}
-        {state === 'complete' && <CompleteState data={completeData} onNewSession={handleNewSession} />}
+        <ErrorBoundary>
+          {state === 'connect'  && <ConnectState />}
+          {state === 'idle'     && <IdleState onStarted={handleStarted} />}
+          {state === 'scraping' && <ScrapingState sessionId={sessionId} onStopped={handleStopped} />}
+          {state === 'complete' && <CompleteState data={completeData} onNewSession={handleNewSession} />}
+        </ErrorBoundary>
       </div>
     </div>
   );

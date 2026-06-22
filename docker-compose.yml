@@ -19,7 +19,23 @@ services:
       - ./postgres-data:/var/lib/postgresql/data
     networks:
       - autoreach_net
-    # NOT exposed to host — only accessible inside autoreach_net
+
+  # ── 1.5 PgBouncer (Connection Pooling) ─────────────────────────
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    restart: unless-stopped
+    environment:
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: postgres
+      DB_NAME: ${POSTGRES_DB}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 20
+    depends_on:
+      - postgres
+    networks:
+      - autoreach_net
 
   # ── 2. API Bridge (Node/Express) ───────────────────────────────
   api:
@@ -28,11 +44,11 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
-      - postgres
+      - pgbouncer
     environment:
       NODE_ENV:          production
       PORT:              3070
-      DATABASE_URL:      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL:      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}?pgbouncer=true
       DIRECT_URL:        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       NEXTAUTH_SECRET:   ${NEXTAUTH_SECRET}
       ENCRYPTION_KEY:    ${ENCRYPTION_KEY}
@@ -41,7 +57,6 @@ services:
       RESEND_WEBHOOK_SECRET: ${RESEND_WEBHOOK_SECRET}
     networks:
       - autoreach_net
-    # Internal only — nginx proxies /api/ to this service
 
   # ── 3. Dashboard (Next.js Standalone) ─────────────────────────
   dashboard:
@@ -50,13 +65,14 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
+      - pgbouncer
       - api
     environment:
       NODE_ENV:              production
       PORT:                  3040
       NEXTAUTH_URL:          https://leads.creativecomet.tn
       NEXTAUTH_SECRET:       ${NEXTAUTH_SECRET}
-      DATABASE_URL:          postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL:          postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}?pgbouncer=true
       DIRECT_URL:            postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       NEXT_PUBLIC_API_URL:   https://leads.creativecomet.tn/api
       GOOGLE_CLIENT_ID:      ${GOOGLE_CLIENT_ID}
