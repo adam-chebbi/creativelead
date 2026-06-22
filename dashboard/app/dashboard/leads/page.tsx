@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getLeads, getLeadFilters, bulkStageLeads, bulkDeleteLeads, updateLead, deleteLead } from '@/lib/api';
 import { stageColor, timeAgo } from '@/lib/utils';
+import { ExternalLink, Star, Check, ArrowLeft, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 const STAGES = ['New','Contacted','Replied','Closed','Unsubscribed'];
@@ -134,13 +135,13 @@ export default function LeadsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <p className="text-white font-medium truncate max-w-[180px]">{lead.name}</p>
-                    {lead.website && <a href={lead.website} target="_blank" rel="noreferrer" className="text-xs text-[#6a9090] hover:text-[#4ecdc4] truncate block max-w-[180px]">↗ {lead.website}</a>}
+                    {lead.website && <a href={lead.website} target="_blank" rel="noreferrer" className="text-xs text-[#6a9090] hover:text-[#4ecdc4] truncate max-w-[180px] flex items-center gap-1 mt-0.5"><ExternalLink className="w-3 h-3" /> {lead.website}</a>}
                   </td>
                   <td className="px-4 py-3 text-[#6a9090] text-xs">{lead.category || '—'}</td>
                   <td className="px-4 py-3 text-[#6a9090] text-xs">{lead.city || '—'}</td>
-                  <td className="px-4 py-3 text-[#6a9090] text-xs">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
+                  <td className="px-4 py-3 text-[#6a9090] text-xs">{lead.rating ? <span className="flex items-center gap-1"><Star className="w-3 h-3" fill="currentColor" /> {lead.rating}</span> : '—'}</td>
                   <td className="px-4 py-3">
-                    {lead.email ? <span className="text-green-400 text-xs">✓ {lead.email}</span> : <span className="text-[#6a9090] text-xs">—</span>}
+                    {lead.email ? <span className="text-green-400 text-xs flex items-center gap-1"><Check className="w-3 h-3" /> {lead.email}</span> : <span className="text-[#6a9090] text-xs">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     <select value={lead.stage} onChange={e => handleStageChange(lead.id, e.target.value)}
@@ -168,9 +169,9 @@ export default function LeadsPage() {
             <p className="text-xs text-[#6a9090]">Page {pagination.page} of {pagination.totalPages}</p>
             <div className="flex gap-2">
               <button disabled={!pagination.hasPrev} onClick={() => setPage(p => p - 1)}
-                className="px-3 py-1.5 rounded text-xs text-white border border-[#1e3232] disabled:opacity-40 hover:border-[#4ecdc4]/40">← Prev</button>
+                className="px-3 py-1.5 flex items-center gap-1 rounded text-xs text-white border border-[#1e3232] disabled:opacity-40 hover:border-[#4ecdc4]/40"><ArrowLeft className="w-3 h-3" /> Prev</button>
               <button disabled={!pagination.hasNext} onClick={() => setPage(p => p + 1)}
-                className="px-3 py-1.5 rounded text-xs text-white border border-[#1e3232] disabled:opacity-40 hover:border-[#4ecdc4]/40">Next →</button>
+                className="px-3 py-1.5 flex items-center gap-1 rounded text-xs text-white border border-[#1e3232] disabled:opacity-40 hover:border-[#4ecdc4]/40">Next <ArrowRight className="w-3 h-3" /></button>
             </div>
           </div>
         )}

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getSettings, updateSettings, regenerateToken, createJob, deleteJob, getWorkerToken } from '@/lib/api';
+import { Check, AlertTriangle } from 'lucide-react';
 
 export default function SettingsPage() {
   const { data: settings, refetch } = useQuery({ queryKey: ['settings'], queryFn: getSettings });
@@ -51,7 +52,7 @@ export default function SettingsPage() {
     setJobs(prev => prev.filter(j => j.id !== id));
   };
 
-  const field = (key: string, label: string, type = 'text', placeholder = '') => (
+  const field = (key: string, label: React.ReactNode, type = 'text', placeholder = '') => (
     <div>
       <label className="block text-xs text-[#6a9090] mb-1">{label}</label>
       <input type={type} value={form[key] ?? ''} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
@@ -79,9 +80,9 @@ export default function SettingsPage() {
       <div className="p-6 rounded-xl border mb-6" style={{ background: '#0d1a1a', borderColor: '#1e3232' }}>
         <h2 className="text-white font-semibold mb-4">API Keys</h2>
         <div className="space-y-4">
-          {field('resendApiKey', `Resend API Key ${settings?.hasResendKey ? '(set ✓)' : ''}`, 'password', 're_...')}
+          {field('resendApiKey', <span className="flex items-center gap-1">Resend API Key {settings?.hasResendKey && <span className="text-green-400 flex items-center gap-1">(set <Check className="w-3 h-3" />)</span>}</span>, 'password', 're_...')}
           {field('resendFromEmail', 'From Email', 'email', 'outreach@yourdomain.com')}
-          {field('groqApiKey', `Groq API Key ${settings?.hasGroqKey ? '(set ✓)' : ''}`, 'password', 'gsk_...')}
+          {field('groqApiKey', <span className="flex items-center gap-1">Groq API Key {settings?.hasGroqKey && <span className="text-green-400 flex items-center gap-1">(set <Check className="w-3 h-3" />)</span>}</span>, 'password', 'gsk_...')}
         </div>
       </div>
 
@@ -159,9 +160,9 @@ export default function SettingsPage() {
 
       {/* Save */}
       <button onClick={handleSave} disabled={saving}
-        className="w-full py-3 rounded-lg font-semibold text-white mb-8 disabled:opacity-50 transition-opacity hover:opacity-90"
+        className="w-full py-3 flex items-center justify-center gap-2 rounded-lg font-semibold text-white mb-8 disabled:opacity-50 transition-opacity hover:opacity-90"
         style={{ background: '#e8806a' }}>
-        {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Settings'}
+        {saving ? 'Saving...' : saved ? <><Check className="w-5 h-5" /> Saved!</> : 'Save Settings'}
       </button>
 
       {/* Worker Token */}
@@ -177,7 +178,7 @@ export default function SettingsPage() {
           <button onClick={handleShowToken} className="px-4 py-2 rounded-lg text-sm border border-[#4ecdc4]/30 text-[#4ecdc4] hover:border-[#4ecdc4]/60">Show Token</button>
         )}
         <div className="mt-4 pt-4 border-t" style={{ borderColor: '#1e3232' }}>
-          <p className="text-xs text-[#6a9090] mb-3">⚠️ Regenerating invalidates all connected workers immediately.</p>
+          <p className="text-xs text-[#6a9090] mb-3 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Regenerating invalidates all connected workers immediately.</p>
           <button onClick={() => setRegenWarning(true)} className="px-4 py-2 rounded-lg text-sm border border-red-400/30 text-red-400 hover:border-red-400/60">Regenerate Token</button>
         </div>
       </div>

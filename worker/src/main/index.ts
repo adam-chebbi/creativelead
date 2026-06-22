@@ -18,7 +18,7 @@ function createWindow() {
     backgroundColor: '#111c1c',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
-      preload:          path.join(__dirname, 'preload.js'),
+      preload:          path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
       nodeIntegration:  false,
       sandbox:          false,
@@ -28,7 +28,7 @@ function createWindow() {
   const dashboardUrl = store.get('apiBaseUrl')?.replace('/api', '') || 'https://leads.creativecomet.tn';
 
   if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:3040');
+    mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
     mainWindow.webContents.openDevTools();
   } else {
     // In production: load the live Next.js web application (The Figma Model)
@@ -243,7 +243,7 @@ ipcMain.handle('clear-token', () => {
 });
 
 ipcMain.handle('open-dashboard', () => {
-  shell.openExternal('https://app.autoreach.dev');
+  shell.openExternal('https://leads.creativecomet.tn');
   return { ok: true };
 });
 

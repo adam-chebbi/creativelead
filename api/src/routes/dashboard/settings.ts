@@ -93,34 +93,7 @@ settingsRouter.patch('/', async (req: Request, res: Response): Promise<void> => 
   }
 });
 
-/** GET /api/dashboard/settings/worker-token */
-settingsRouter.get('/worker-token', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { workerToken: true } });
-    if (!user) { res.status(404).json({ error: 'User not found' }); return; }
-    res.json({ workerToken: user.workerToken });
-  } catch (err) {
-    console.error('[settings/worker-token]', err);
-    res.status(500).json({ error: 'Failed to fetch token' });
-  }
-});
 
-/** POST /api/dashboard/settings/regenerate-token */
-settingsRouter.post('/regenerate-token', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const newToken = crypto.randomBytes(32).toString('hex');
-    await prisma.user.update({ where: { id: req.userId }, data: { workerToken: newToken } });
-    await prisma.workerSession.updateMany({ where: { userId: req.userId, status: 'online' }, data: { status: 'offline' } });
-    res.json({
-      ok: true,
-      workerToken: newToken,
-      message: 'Token regenerated. All connected workers disconnected. This is the only time the full token will be shown.',
-    });
-  } catch (err) {
-    console.error('[settings/regenerate-token]', err);
-    res.status(500).json({ error: 'Failed to regenerate token' });
-  }
-});
 
 /** POST /api/dashboard/settings/jobs — create a scraping job */
 settingsRouter.post('/jobs', async (req: Request, res: Response): Promise<void> => {

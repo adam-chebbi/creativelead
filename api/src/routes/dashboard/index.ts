@@ -7,6 +7,7 @@ import { outreachRouter } from './outreach';
 import { settingsRouter } from './settings';
 import { sessionsRouter } from './sessions';
 import { streamRouter }   from './stream';
+import { ariaRouter }     from './aria';
 
 export const dashboardRouter = Router();
 
@@ -20,3 +21,4 @@ dashboardRouter.use('/outreach', outreachRouter);
 dashboardRouter.use('/settings', settingsRouter);
 dashboardRouter.use('/sessions', sessionsRouter);
 dashboardRouter.use('/stream',   streamRouter);
+dashboardRouter.use('/aria',     ariaRouter);

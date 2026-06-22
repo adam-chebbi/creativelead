@@ -1,11 +1,14 @@
 import React from 'react';
+import { CheckCircle, ExternalLink } from 'lucide-react';
 
 interface Props { data: any; onNewSession: () => void; }
 
 export default function CompleteState({ data, onNewSession }: Props) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[500px] px-8 text-center">
-      <div className="text-5xl mb-6">✅</div>
+      <div className="mb-6 flex justify-center text-green-400">
+        <CheckCircle className="w-16 h-16" />
+      </div>
       <h1 className="text-xl font-bold text-white mb-2">Session Complete</h1>
       <p className="text-sm mb-8" style={{ color: '#6a9090' }}>Your leads have been synced to the dashboard.</p>
 
@@ -29,7 +32,7 @@ export default function CompleteState({ data, onNewSession }: Props) {
         </button>
         <button onClick={() => window.autoreach.openDashboard()}
           className="flex-1 py-3 rounded-xl text-sm border" style={{ borderColor: '#1e3232', color: '#4ecdc4' }}>
-          View Dashboard ↗
+          <span className="flex items-center justify-center gap-2">View Dashboard <ExternalLink className="w-4 h-4" /></span>
         </button>
       </div>
     </div>

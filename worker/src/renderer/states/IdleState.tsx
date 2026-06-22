@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Play, Eye } from 'lucide-react';
 
 interface Props { onStarted: (sessionId: string) => void; }
 
@@ -76,11 +77,11 @@ export default function IdleState({ onStarted }: Props) {
         <button onClick={handleStart} disabled={loading}
           className="flex-1 py-3 rounded-xl font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
           style={{ background: '#e8806a' }}>
-          {loading ? 'Starting...' : '▶  Start Scraping'}
+          {loading ? 'Starting...' : <span className="flex items-center justify-center gap-2"><Play className="w-4 h-4" /> Start Scraping</span>}
         </button>
         <button onClick={() => window.autoreach.watchBrowser()}
-          className="px-4 py-3 rounded-xl text-sm border" style={{ borderColor: '#1e3232', color: '#6a9090' }}>
-          👁 Watch
+          className="px-4 py-3 rounded-xl text-sm border flex items-center justify-center gap-2" style={{ borderColor: '#1e3232', color: '#6a9090' }}>
+          <Eye className="w-4 h-4" /> Watch
         </button>
       </div>
 

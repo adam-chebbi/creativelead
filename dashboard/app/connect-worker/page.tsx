@@ -1,10 +1,9 @@
 import { getServerSession } from 'next-auth/react';
 import { authOptions } from '../api/auth/[...nextauth]/options';
-import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
-
-const prisma = new PrismaClient();
+import { Laptop } from 'lucide-react';
 
 export default async function ConnectWorkerPage() {
   const session = await getServerSession(authOptions);
@@ -33,8 +32,8 @@ export default async function ConnectWorkerPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#0a1414] text-white p-6">
       <div className="max-w-md w-full p-8 rounded-2xl border" style={{ background: '#0d1a1a', borderColor: '#1e3232' }}>
         <div className="text-center">
-          <div className="w-16 h-16 rounded-full bg-[#1e3232] flex items-center justify-center mx-auto mb-6">
-            <span className="text-3xl">💻</span>
+          <div className="w-16 h-16 rounded-full bg-[#1e3232] flex items-center justify-center mx-auto mb-6 text-[#4ecdc4]">
+            <Laptop className="w-8 h-8" />
           </div>
           <h1 className="text-2xl font-bold mb-3">Connecting Desktop App</h1>
           <p className="text-[#6a9090] text-sm mb-8">

@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getLeads, generateEmail, sendEmail } from '@/lib/api';
+import { Sparkles } from 'lucide-react';
 
 const LANGS = [{ value: 'english', label: 'English' }, { value: 'greek', label: 'Greek' }, { value: 'arabic', label: 'Arabic' }];
 const SPEEDS = [{ value: 'normal', label: 'Normal (3–6 min/email)' }, { value: 'slow', label: 'Slow (8–15 min/email)' }];
@@ -122,8 +123,8 @@ export default function OutreachPage() {
 
           <div className="flex gap-3">
             <button onClick={handleGenerate} disabled={generating || leads.length === 0}
-              className="flex-1 py-3 rounded-lg text-sm font-medium border border-[#4ecdc4]/30 text-[#4ecdc4] hover:border-[#4ecdc4]/60 disabled:opacity-40 transition-colors">
-              {generating ? 'Generating...' : '✨ Generate Preview'}
+              className="flex-1 py-3 flex items-center justify-center gap-2 rounded-lg text-sm font-medium border border-[#4ecdc4]/30 text-[#4ecdc4] hover:border-[#4ecdc4]/60 disabled:opacity-40 transition-colors">
+              {generating ? 'Generating...' : <><Sparkles className="w-4 h-4" /> Generate Preview</>}
             </button>
             <button onClick={() => setConfirm(true)} disabled={selectedLeads.size === 0 || !preview || sending}
               className="flex-1 py-3 rounded-lg text-sm font-semibold text-white disabled:opacity-40 transition-opacity hover:opacity-90"

@@ -3,20 +3,24 @@ import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { useLeadStream } from '@/hooks/useLeadStream';
+import { BarChart, Users, GitMerge, Send, TrendingUp, Settings, Download } from 'lucide-react';
 
 const NAV = [
-  { href: '/dashboard',          label: '📊  Overview' },
-  { href: '/dashboard/leads',    label: '👥  Leads' },
-  { href: '/dashboard/pipeline', label: '🔀  Pipeline' },
-  { href: '/dashboard/outreach', label: '📤  Outreach' },
-  { href: '/dashboard/reports',  label: '📈  Reports' },
-  { href: '/dashboard/settings', label: '⚙️  Settings' },
-  { href: '/download',           label: '⬇️  Download Worker' },
+  { href: '/dashboard',          label: 'Overview', icon: BarChart },
+  { href: '/dashboard/leads',    label: 'Leads', icon: Users },
+  { href: '/dashboard/pipeline', label: 'Pipeline', icon: GitMerge },
+  { href: '/dashboard/outreach', label: 'Outreach', icon: Send },
+  { href: '/dashboard/reports',  label: 'Reports', icon: TrendingUp },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+  { href: '/download',           label: 'Download Worker', icon: Download },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
+
+  useLeadStream();
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#080f0f' }}>
@@ -33,15 +37,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Nav */}
         <nav className="flex-1 px-3 space-y-1">
-          {NAV.map(({ href, label }) => {
+          {NAV.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
             return (
               <Link key={href} href={href}
                 className={cn(
-                  'flex items-center px-3 py-2.5 rounded-lg text-sm transition-colors',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
                   active ? 'text-white' : 'text-[#6a9090] hover:text-white hover:bg-[#1e3232]'
                 )}
                 style={active ? { background: '#1e3232', color: '#fff' } : {}}>
+                <Icon className="w-4 h-4" />
                 {label}
               </Link>
             );

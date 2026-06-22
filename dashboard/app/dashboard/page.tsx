@@ -4,6 +4,7 @@ import { useSession, getSession } from 'next-auth/react';
 import { useQuery } from '@tanstack/react-query';
 import { getStats } from '@/lib/api';
 import { formatDateTime, timeAgo, stageColor } from '@/lib/utils';
+import { Laptop, Check } from 'lucide-react';
 import type { DashboardStats, Lead } from '@/lib/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -135,7 +136,9 @@ export default function OverviewPage() {
               </div>
             ) : (
               <div className="text-center py-4">
-                <p className="text-4xl mb-3">💻</p>
+                <div className="mb-3 flex justify-center text-[#4ecdc4]">
+                  <Laptop className="w-10 h-10" />
+                </div>
                 <p className="text-white text-sm font-medium mb-2">No worker connected</p>
                 <p className="text-[#6a9090] text-xs mb-4">Download and connect the desktop worker to start collecting leads.</p>
                 <a href="/download" className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#e8806a' }}>Download Worker</a>
@@ -185,7 +188,7 @@ export default function OverviewPage() {
                         <td className="py-3 text-white font-medium truncate max-w-[160px]">{lead.name}</td>
                         <td className="py-3 text-[#6a9090]">{lead.city || '—'}</td>
                         <td className="py-3">
-                          {lead.email ? <span className="text-green-400">✓</span> : <span className="text-[#6a9090]">—</span>}
+                          {lead.email ? <span className="text-green-400 inline-flex"><Check className="w-4 h-4" /></span> : <span className="text-[#6a9090]">—</span>}
                         </td>
                         <td className="py-3">
                           <span className={`px-2 py-0.5 rounded-full text-xs border ${stageColor(lead.stage)}`}>{lead.stage}</span>

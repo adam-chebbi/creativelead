@@ -3,6 +3,7 @@ import { z } from 'zod';
 import Groq from 'groq-sdk';
 import axios from 'axios';
 import { prisma } from '../../lib/prisma';
+import { decrypt } from '../../lib/encryption';
 
 export const outreachRouter = Router();
 
@@ -61,8 +62,9 @@ outreachRouter.post('/generate', async (req: Request, res: Response): Promise<vo
   const { lead, language, template } = parsed.data;
 
   try {
-    const settings = await prisma.userSettings.findUnique({ where: { userId: req.userId }, select: { groqApiKey: true } });
-    const groqKey = settings?.groqApiKey || process.env.GROQ_API_KEY;
+    const settings = await prisma.userSettings.findUnique({ where: { userId: req.userId }, select: { groqApiKeyEncrypted: true } });
+    let groqKey = process.env.GROQ_API_KEY;
+    try { if (settings?.groqApiKeyEncrypted) groqKey = decrypt(settings.groqApiKeyEncrypted); } catch (e) {}
     if (!groqKey) { res.status(400).json({ error: 'Groq API key not configured. Add it in Settings.' }); return; }
 
     const groq = new Groq({ apiKey: groqKey });
@@ -107,8 +109,9 @@ outreachRouter.post('/send', async (req: Request, res: Response): Promise<void> 
   const { businessId, businessName, toEmail, subject, body, language } = parsed.data;
 
   try {
-    const settings = await prisma.userSettings.findUnique({ where: { userId: req.userId }, select: { resendApiKey: true, resendFromEmail: true } });
-    const resendKey = settings?.resendApiKey || process.env.RESEND_API_KEY;
+    const settings = await prisma.userSettings.findUnique({ where: { userId: req.userId }, select: { resendApiKeyEncrypted: true, resendFromEmail: true } });
+    let resendKey = process.env.RESEND_API_KEY;
+    try { if (settings?.resendApiKeyEncrypted) resendKey = decrypt(settings.resendApiKeyEncrypted); } catch (e) {}
     const fromEmail = settings?.resendFromEmail || process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
     if (!resendKey) { res.status(400).json({ error: 'Resend API key not configured. Add it in Settings.' }); return; }
 
@@ -127,7 +130,7 @@ outreachRouter.post('/send', async (req: Request, res: Response): Promise<void> 
     }
 
     await prisma.sentEmail.create({
-      data: { userId: req.userId, businessId: businessId || null, businessName, email: toEmail, subject, body, language, status: 'sent', fromEmail },
+      data: { userId: req.userId, businessId: businessId || null, businessName, toEmail, subject, body, language, status: 'sent', senderEmail: fromEmail },
     });
 
     if (businessId) {
@@ -150,13 +153,19 @@ outreachRouter.get('/sent', async (req: Request, res: Response): Promise<void> =
       prisma.sentEmail.count({ where: { userId: req.userId } }),
       prisma.sentEmail.findMany({
         where: { userId: req.userId },
-        orderBy: { dateSent: 'desc' },
+        orderBy: { sentAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
-        select: { id: true, businessName: true, email: true, subject: true, dateSent: true, language: true, status: true, fromEmail: true },
+        select: { id: true, businessName: true, toEmail: true, subject: true, sentAt: true, language: true, status: true, senderEmail: true },
       }),
     ]);
-    res.json({ data: emails, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+    const formattedEmails = emails.map(e => ({
+      ...e,
+      email: e.toEmail,
+      dateSent: e.sentAt,
+      fromEmail: e.senderEmail
+    }));
+    res.json({ data: formattedEmails, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   } catch (err) {
     console.error('[outreach/sent]', err);
     res.status(500).json({ error: 'Failed to fetch sent emails' });

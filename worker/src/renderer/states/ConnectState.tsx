@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link as LinkIcon, ExternalLink } from 'lucide-react';
 
 export default function ConnectState() {
   const [token, setToken]   = useState('');
@@ -15,7 +16,9 @@ export default function ConnectState() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[500px] px-8">
-      <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mb-6" style={{ background: '#162424' }}>🔗</div>
+      <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6" style={{ background: '#162424', color: '#4ecdc4' }}>
+        <LinkIcon className="w-8 h-8" />
+      </div>
       <h1 className="text-xl font-bold text-white mb-2">Connect to Creative Leads</h1>
       <p className="text-sm text-center mb-8" style={{ color: '#6a9090' }}>
         Paste your worker token from the Creative Leads dashboard download page.
@@ -41,7 +44,7 @@ export default function ConnectState() {
         <button
           onClick={() => window.autoreach.openDashboard()}
           className="w-full py-2 text-sm" style={{ color: '#6a9090' }}>
-          Open Creative Leads dashboard to get your token ↗
+          <span className="flex items-center justify-center gap-1">Open Creative Leads dashboard to get your token <ExternalLink className="w-3 h-3" /></span>
         </button>
       </div>
     </div>

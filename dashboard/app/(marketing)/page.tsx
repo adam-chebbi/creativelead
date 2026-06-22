@@ -1,5 +1,5 @@
 import Link from 'next/link';
-
+import { Search, Eye, Mail, BarChart, Star, RefreshCcw } from 'lucide-react';
 export default function LandingPage() {
   return (
     <main>
@@ -37,38 +37,38 @@ export default function LandingPage() {
         <div className="grid md:grid-cols-3 gap-6">
           {[
             {
-              icon: '🔍',
+              icon: <Search className="w-8 h-8 text-[#4ecdc4]" />,
               title: 'Zero API costs',
               desc: 'Your machine navigates Google Maps directly. No paid APIs. No proxies. No per-lead charges — ever.',
             },
             {
-              icon: '👁️',
+              icon: <Eye className="w-8 h-8 text-[#4ecdc4]" />,
               title: 'Watch it work live',
               desc: 'A real browser window opens on your screen. Watch the scraper type, scroll, and collect leads in real time.',
             },
             {
-              icon: '📧',
+              icon: <Mail className="w-8 h-8 text-[#4ecdc4]" />,
               title: 'AI outreach built in',
               desc: 'Groq-powered personalised emails for every lead. Automated follow-ups at day 3, 7, and 14. English, Greek, Arabic.',
             },
             {
-              icon: '📊',
+              icon: <BarChart className="w-8 h-8 text-[#4ecdc4]" />,
               title: 'Full CRM pipeline',
               desc: 'Kanban board with drag-and-drop. Move leads from New to Contacted to Replied to Closed. Track every deal.',
             },
             {
-              icon: '⭐',
+              icon: <Star className="w-8 h-8 text-[#4ecdc4]" />,
               title: 'Reviews included',
               desc: 'Automatically scrapes the 50 most recent Google Maps reviews for every business. Understand your leads before you reach out.',
             },
             {
-              icon: '🔄',
+              icon: <RefreshCcw className="w-8 h-8 text-[#4ecdc4]" />,
               title: 'Auto follow-ups',
               desc: 'Set it and forget it. Creative Leads sends follow-up emails automatically and stops the moment a lead replies.',
             },
           ].map((f) => (
             <div key={f.title} className="p-6 rounded-xl border" style={{ background: '#0d1a1a', borderColor: '#1e3232' }}>
-              <div className="text-3xl mb-4">{f.icon}</div>
+              <div className="mb-4">{f.icon}</div>
               <h3 className="text-white font-semibold text-lg mb-2">{f.title}</h3>
               <p className="text-[#6a9090] text-sm leading-relaxed">{f.desc}</p>
             </div>

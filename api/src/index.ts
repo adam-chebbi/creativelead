@@ -74,6 +74,21 @@ app.get('/health', (_req, res) => {
 app.use('/api/worker', workerRouter);
 app.use('/api/dashboard', dashboardRouter);
 
+app.get('/api/unsubscribe', async (req, res) => {
+  const email = req.query.email as string;
+  if (!email) { res.status(400).json({ error: 'Missing email' }); return; }
+  try {
+    await prisma.business.updateMany({
+      where: { email },
+      data: { unsubscribed: true, stage: 'Unsubscribed' },
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[unsubscribe]', err);
+    res.status(500).json({ error: 'Failed to unsubscribe' });
+  }
+});
+
 // ── 404 Handler ───────────────────────────────────────────────
 app.use((_req, res) => {
   res.status(404).json({ error: 'Route not found' });

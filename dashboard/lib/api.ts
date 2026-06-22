@@ -66,12 +66,6 @@ export const getSettings = () =>
 export const updateSettings = (data: Record<string, unknown>) =>
   api.patch('/api/dashboard/settings', data).then((r) => r.data);
 
-export const getWorkerToken = () =>
-  api.get('/api/dashboard/settings/worker-token').then((r) => r.data);
-
-export const regenerateToken = () =>
-  api.post('/api/dashboard/settings/regenerate-token').then((r) => r.data);
-
 export const createJob = (data: Record<string, unknown>) =>
   api.post('/api/dashboard/settings/jobs', data).then((r) => r.data);
 

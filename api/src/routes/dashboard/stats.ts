@@ -17,8 +17,8 @@ statsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
     ] = await Promise.all([
       prisma.business.count({ where: { userId } }),
       prisma.business.count({ where: { userId, email: { not: '' } } }),
-      prisma.sentEmail.count({ where: { userId, dateSent: { gte: startOfMonth }, status: 'sent' } }),
-      prisma.sentEmail.count({ where: { userId, dateSent: { gte: startOfToday }, status: 'sent' } }),
+      prisma.sentEmail.count({ where: { userId, sentAt: { gte: startOfMonth }, status: 'sent' } }),
+      prisma.sentEmail.count({ where: { userId, sentAt: { gte: startOfToday }, status: 'sent' } }),
       prisma.business.groupBy({ by: ['stage'], where: { userId }, _count: { stage: true } }),
       prisma.scrapingSession.findFirst({
         where: { userId, status: 'running' },

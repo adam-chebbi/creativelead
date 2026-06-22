@@ -79,22 +79,22 @@ async function processFollowups(): Promise<void> {
       });
 
       const baseUrl = process.env.APP_BASE_URL || 'https://app.autoreach.dev';
-      const unsubUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(f.email)}`;
+      const unsubUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(f.toEmail)}`;
       const html = buildHtml(body.replace(/\n/g, '<br>'), unsubUrl);
 
       await axios.post(
         'https://api.resend.com/emails',
-        { from: fromEmail, to: [f.email], subject, html },
+        { from: fromEmail, to: [f.toEmail], subject, html },
         { headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' }, timeout: 15000 }
       );
 
       await prisma.followupLog.update({
         where: { id: f.id },
-        data: { status: 'sent', subject, body, dateSent: new Date() },
+        data: { status: 'sent', subject, body, sentAt: new Date() },
       });
 
       sent++;
-      console.log(`[CRON] ✓ Follow-up #${f.followupStep} → ${f.email}`);
+      console.log(`[CRON] ✓ Follow-up #${f.followupStep} → ${f.toEmail}`);
       await sleep(3000);
     } catch (err) {
       console.error(`[CRON] Failed follow-up ${f.id}:`, err);

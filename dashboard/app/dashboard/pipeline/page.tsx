@@ -8,6 +8,7 @@ import {
   PointerSensor, useSensor, useSensors, useDroppable,
 } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
+import { Check, Star, ArrowRight } from 'lucide-react';
 
 const STAGES = ['New','Contacted','Replied','Closed'];
 const STAGE_COLORS: Record<string,string> = {
@@ -22,8 +23,8 @@ function KanbanCard({ lead }: { lead: Lead }) {
       className="p-4 rounded-xl border cursor-grab active:cursor-grabbing" style={{ background: '#111c1c', borderColor: '#1e3232' }}>
       <p className="text-white text-sm font-medium truncate">{lead.name}</p>
       <p className="text-[#6a9090] text-xs mt-1 truncate">{lead.city}</p>
-      {lead.email && <p className="text-green-400 text-xs mt-1">✓ email</p>}
-      {lead.rating && <p className="text-xs text-[#6a9090] mt-1">⭐ {lead.rating}</p>}
+      {lead.email && <p className="text-green-400 text-xs mt-1 flex items-center gap-1"><Check className="w-3 h-3" /> email</p>}
+      {lead.rating && <p className="text-xs text-[#6a9090] mt-1 flex items-center gap-1"><Star className="w-3 h-3" fill="currentColor" /> {lead.rating}</p>}
     </div>
   );
 }
@@ -76,9 +77,9 @@ export default function PipelinePage() {
       {/* Conversion rates */}
       {rates && (
         <div className="flex gap-6 mb-8 text-sm">
-          <span className="text-[#6a9090]">New → Contacted: <span className="text-white font-medium">{rates.newToContacted}%</span></span>
-          <span className="text-[#6a9090]">Contacted → Replied: <span className="text-white font-medium">{rates.contactedToReplied}%</span></span>
-          <span className="text-[#6a9090]">Replied → Closed: <span className="text-white font-medium">{rates.repliedToClosed}%</span></span>
+          <span className="text-[#6a9090] flex items-center gap-1">New <ArrowRight className="w-3 h-3" /> Contacted: <span className="text-white font-medium ml-1">{rates.newToContacted}%</span></span>
+          <span className="text-[#6a9090] flex items-center gap-1">Contacted <ArrowRight className="w-3 h-3" /> Replied: <span className="text-white font-medium ml-1">{rates.contactedToReplied}%</span></span>
+          <span className="text-[#6a9090] flex items-center gap-1">Replied <ArrowRight className="w-3 h-3" /> Closed: <span className="text-white font-medium ml-1">{rates.repliedToClosed}%</span></span>
         </div>
       )}
 
