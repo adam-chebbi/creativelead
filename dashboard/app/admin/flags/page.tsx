@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Toggle } from 'lucide-react';
+import { ToggleLeft } from 'lucide-react';
 
 type Flag = { id: string; key: string; enabled: boolean; description: string | null; updatedAt: string };
 
@@ -47,7 +47,7 @@ export default function AdminFlagsPage() {
     <div>
       <h1 className="text-2xl font-bold text-white mb-2">Feature Flags</h1>
       <p className="text-sm mb-8" style={{ color: '#6a9090' }}>
-        Toggle flags instantly — changes take effect without a deployment.
+        ToggleLeft flags instantly — changes take effect without a deployment.
       </p>
 
       {/* New flag */}

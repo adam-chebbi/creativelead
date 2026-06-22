@@ -41,7 +41,7 @@ export async function writeAuditLog(
       actorEmail,
       action,
       targetId: targetId ?? null,
-      metadata: metadata ?? null,
+      metadata: (metadata ?? undefined) as any,
     },
   });
 }

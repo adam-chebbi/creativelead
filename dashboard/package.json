@@ -40,9 +40,11 @@
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.3.0",
     "tailwindcss-animate": "^1.0.7",
+    "zod": "^4.4.3",
     "zustand": "^4.5.2"
   },
   "devDependencies": {
+    "@next/swc-linux-x64-gnu": "^14.2.4",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.14.2",

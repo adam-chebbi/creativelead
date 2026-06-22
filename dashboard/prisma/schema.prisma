@@ -91,6 +91,7 @@ model User {
   workerSessions   WorkerSession[]
   scrapingJobs     ScrapingJob[]
   auditLogsActed   AuditLog[] @relation("AuditActor")
+  desktopAuthCodes DesktopAuthCode[]
 
   @@map("users")
 }
@@ -135,6 +136,7 @@ model DesktopAuthCode {
   code      String    @unique
   deviceId  String    @map("device_id")
   userId    String?   @map("user_id")
+  user      User?     @relation(fields: [userId], references: [id])
   expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
   createdAt DateTime  @default(now()) @map("created_at")
@@ -143,6 +145,8 @@ model DesktopAuthCode {
   @@index([code])
   @@map("desktop_auth_codes")
 }
+
+
 
 // ─────────────────────────────────────────────────────────────
 // USER SETTINGS

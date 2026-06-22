@@ -16,8 +16,7 @@ export async function POST(req: NextRequest) {
     // Actually the blueprint says "dashboard/app/api/desktop/exchange/route.ts" so we'll do it here.
 
     const authCode = await prisma.desktopAuthCode.findUnique({
-      where: { code },
-      include: { user: true }
+      where: { code }
     });
 
     if (!authCode) {
@@ -36,16 +35,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Code expired' }, { status: 400 });
     }
 
-    if (!authCode.userId || !authCode.user) {
+    if (!authCode.userId) {
       return NextResponse.json({ error: 'Auth not completed by user' }, { status: 400 });
     }
 
     // Ensure workerToken exists for this user
-    let token = authCode.user.workerToken;
+    let token = null;
+    const user = await prisma.user.findUnique({ where: { id: authCode.userId } });
+    if (user) token = user.workerToken;
     if (!token) {
       // In case the user doesn't have a worker token yet, generate one
-      const { v4: uuidv4 } = require('uuid');
-      token = uuidv4();
+      const { randomBytes } = await import('crypto');
+      token = randomBytes(32).toString('hex');
       await prisma.user.update({
         where: { id: authCode.userId },
         data: { workerToken: token }
