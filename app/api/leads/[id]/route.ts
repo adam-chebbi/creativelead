@@ -2,12 +2,32 @@ import { NextResponse } from 'next/server';
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from '@/lib/auth';
 import { z } from 'zod';
+import { scoreLeadById, shouldRescoreOnUpdate } from '@/utils/score-lead-server';
 
 const updateSchema = z.object({
   pipelineStage: z.string().optional(),
   ownerId: z.string().optional().nullable(),
   aiScore: z.number().optional().nullable(),
   classification: z.string().optional().nullable(),
+  opportunityScore: z.number().optional().nullable(),
+  competitionScore: z.number().optional().nullable(),
+  growthScore: z.number().optional().nullable(),
+  seoWeakness: z.number().optional().nullable(),
+  websiteQuality: z.number().optional().nullable(),
+  reviewReputation: z.number().optional().nullable(),
+  aiScoreLastComputed: z.string().datetime().optional().nullable(),
+  aiScoreInputsHash: z.string().optional().nullable(),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
+  businessName: z.string().optional(),
+  category: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  website: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  rating: z.number().optional().nullable(),
+  reviewCount: z.number().int().optional().nullable(),
 }).strict();
 
 export async function PATCH(
@@ -41,6 +61,15 @@ export async function PATCH(
         updatedAt: new Date(),
       },
     });
+
+    if (shouldRescoreOnUpdate(
+      { rating: existing.rating, reviewCount: existing.reviewCount, website: existing.website, category: existing.category, city: existing.city },
+      { rating: data.rating, reviewCount: data.reviewCount, website: data.website, category: data.category, city: data.city },
+    )) {
+      scoreLeadById(params.id, orgId).catch((err) =>
+        console.error(`[LEAD_PATCH] rescore failed for ${params.id}:`, err)
+      );
+    }
 
     if (data.pipelineStage && data.pipelineStage !== existing.pipelineStage) {
       await prisma.pipelineStageEntry.create({

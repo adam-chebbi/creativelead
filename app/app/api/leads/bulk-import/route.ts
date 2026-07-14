@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from '@/lib/auth';
 import { rateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
+import { scoreLeadById, generateImportReport } from '@/utils/score-lead-server';
+import { queueWebsiteIntel } from '@/utils/website-intel-server';
 
 const leadSchema = z.object({
   business_name: z.string(),
@@ -70,12 +72,50 @@ export async function POST(req: Request) {
 
     const successful = createdLeads.filter((r) => r.status === 'fulfilled').length;
 
+    const report = generateImportReport(leads, createdLeads);
+    if (report.rowsWithRatingButNull.length > 0 || report.rowsWithReviewCountButNull.length > 0) {
+      console.warn('[BULK_IMPORT_VALIDATION] rating/review_count may not have persisted:', {
+        rowsWithRating: report.rowsWithRating,
+        rowsWithReviewCount: report.rowsWithReviewCount,
+        rowsWithRatingButNull: report.rowsWithRatingButNull.length,
+        rowsWithReviewCountButNull: report.rowsWithReviewCountButNull.length,
+      });
+    }
+
+    const fulfilledLeads = createdLeads
+      .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    (async () => {
+      for (const lead of fulfilledLeads) {
+        try {
+          await scoreLeadById(lead.id, orgId);
+        } catch (err) {
+          console.error(`[BULK_IMPORT] scoring failed for lead ${lead.id}:`, err);
+        }
+        if (lead.website) {
+          queueWebsiteIntel(lead.id, orgId).catch((err) =>
+            console.error(`[BULK_IMPORT] website intel failed for ${lead.id}:`, err)
+          );
+        }
+      }
+    })();
+
     await prisma.auditLog.create({
       data: {
         organizationId: orgId,
         actorId: userId,
         action: 'leads.bulk_import',
-        metadata: { attempted: leads.length, imported: successful },
+        metadata: {
+          attempted: leads.length,
+          imported: successful,
+          validation: {
+            rowsWithRating: report.rowsWithRating,
+            rowsWithReviewCount: report.rowsWithReviewCount,
+            rowsWithRatingButNull: report.rowsWithRatingButNull.length,
+            rowsWithReviewCountButNull: report.rowsWithReviewCountButNull.length,
+          },
+        },
       },
     });
 

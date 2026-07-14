@@ -103,6 +103,11 @@ export interface Lead {
   _stageEnteredAt?: string;
   _wonLostReason?: string;
 
+  // Scoring Fields
+  _insufficientData?: string[];
+  _aiScoreLastComputed?: string;
+  _aiScoreInputsHash?: string;
+
   [key: string]: unknown;
 }
 

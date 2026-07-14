@@ -5,29 +5,70 @@ import { scrapeWebsiteContacts, ScrapedContacts } from './website-scraper';
 import { runEnrichmentApi } from './enrichment-client';
 
 export function generateAIScores(lead: Partial<Lead>): Partial<Lead> {
-  const rating = lead.rating || 0;
-  const reviewCount = lead.review_count || 0;
+  const rating = lead.rating;
+  const reviewCount = lead.review_count;
   const hasWebsite = !!lead.website;
-  const hasPhone = !!lead.phone || !!lead.phone_number;
 
-  let review_reputation = (rating / 5) * 100;
-  if (reviewCount < 10) review_reputation *= 0.7;
-  if (reviewCount === 0) review_reputation = 0;
+  let review_reputation: number | null = null;
+  if (rating === null || rating === undefined || rating <= 0) {
+    review_reputation = null;
+  } else {
+    let rr = (rating / 5) * 100;
+    const cnt = reviewCount ?? 0;
+    if (cnt < 5) rr *= 0.5;
+    else if (cnt < 10) rr *= 0.7;
+    else if (cnt < 30) rr *= 0.85;
+    review_reputation = Math.round(rr);
+  }
 
-  let website_quality = hasWebsite ? 80 : 0;
+  let website_quality: number | null = null;
+  if (lead.website_intelligence && lead.website_intelligence.reachable) {
+    const wi = lead.website_intelligence;
+    let wq = 0;
+    if (wi.reachable) wq += 10;
+    if (wi.isHttps) wq += 15;
+    if (wi.hasViewportMeta) wq += 10;
+    if (wi.seo?.hasTitle) wq += 8;
+    if (wi.seo?.hasMetaDescription) wq += 8;
+    if (wi.seo?.hasStructuredData) wq += 10;
+    if (wi.hasAnalytics) wq += 10;
+    if (wi.hasChatbot) wq += 7;
+    if (wi.performance?.loadTimeMs !== undefined) {
+      if (wi.performance.loadTimeMs < 500) wq += 15;
+      else if (wi.performance.loadTimeMs < 1500) wq += 11;
+      else if (wi.performance.loadTimeMs < 3000) wq += 6;
+      else if (wi.performance.loadTimeMs < 5000) wq += 3;
+    }
+    website_quality = Math.round(Math.min(100, Math.max(0, wq)));
+  } else if (hasWebsite) {
+    website_quality = 50;
+  } else {
+    website_quality = 0;
+  }
 
   let seo_weakness = 0;
   if (!hasWebsite) seo_weakness += 50;
-  if (rating < 4.0) seo_weakness += 25;
-  if (reviewCount < 20) seo_weakness += 25;
+  if (rating === null || rating === undefined || rating <= 0) seo_weakness += 25;
+  else if (rating < 4.0) seo_weakness += 25;
+  if (reviewCount === null || reviewCount === undefined) seo_weakness += 25;
+  else if (reviewCount < 20) seo_weakness += 25;
 
-  let competition_score = Math.min(100, (reviewCount / 500) * 100);
+  let competition_score: number;
+  if (reviewCount === null || reviewCount === undefined) {
+    competition_score = 50;
+  } else {
+    competition_score = Math.min(100, Math.round((reviewCount / 500) * 100));
+  }
 
   let growth_score = 100 - competition_score;
-  if (rating > 4.5 && reviewCount < 50) growth_score += 20;
-  growth_score = Math.min(100, Math.max(0, growth_score));
+  if (rating !== null && rating !== undefined && rating > 0) {
+    if (rating > 4.5 && (reviewCount ?? 0) < 50) growth_score += 20;
+    else if (rating > 4.0) growth_score += 10;
+    else if (rating < 3.0) growth_score -= 15;
+  }
+  growth_score = Math.round(Math.min(100, Math.max(0, growth_score)));
 
-  let opportunity_score = (seo_weakness * 0.6) + ((100 - website_quality) * 0.4);
+  let opportunity_score = Math.round((seo_weakness * 0.6) + ((100 - (website_quality ?? 50)) * 0.4));
 
   const settings = getSettings();
   const w = settings.weights;
@@ -35,21 +76,18 @@ export function generateAIScores(lead: Partial<Lead>): Partial<Lead> {
   const totalWeight = w.opportunity + w.competition + w.growth + w.seo + w.website + w.reputation;
   const weightFactor = totalWeight > 0 ? totalWeight : 1;
 
+  const wq = website_quality ?? 50;
+  const rr = review_reputation ?? 50;
+
   let ai_score =
     (opportunity_score * (w.opportunity / weightFactor)) +
     ((100 - competition_score) * (w.competition / weightFactor)) +
     (growth_score * (w.growth / weightFactor)) +
     ((100 - seo_weakness) * (w.seo / weightFactor)) +
-    (website_quality * (w.website / weightFactor)) +
-    (review_reputation * (w.reputation / weightFactor));
+    (wq * (w.website / weightFactor)) +
+    (rr * (w.reputation / weightFactor));
 
   ai_score = Math.round(Math.min(100, Math.max(0, ai_score)));
-  opportunity_score = Math.round(opportunity_score);
-  competition_score = Math.round(competition_score);
-  growth_score = Math.round(growth_score);
-  seo_weakness = Math.round(seo_weakness);
-  website_quality = Math.round(website_quality);
-  review_reputation = Math.round(review_reputation);
 
   let classification: 'Hot' | 'Warm' | 'Cold' = 'Cold';
   if (ai_score >= 75) classification = 'Hot';
@@ -57,8 +95,17 @@ export function generateAIScores(lead: Partial<Lead>): Partial<Lead> {
 
   return {
     ai_score, classification, opportunity_score, competition_score,
-    growth_score, seo_weakness, website_quality, review_reputation
+    growth_score, seo_weakness, website_quality, review_reputation,
+    _insufficientData: buildInsufficientDataFlags(rating, reviewCount, lead.website_intelligence),
   };
+}
+
+function buildInsufficientDataFlags(rating: number | null | undefined, reviewCount: number | null | undefined, websiteIntel: any): string[] {
+  const flags: string[] = [];
+  if (rating === null || rating === undefined || rating <= 0) flags.push('review_reputation');
+  if (reviewCount === null || reviewCount === undefined) flags.push('competition');
+  if (!websiteIntel?.reachable) flags.push('website_quality');
+  return flags;
 }
 
 export async function generateLiveEnrichment(lead: Partial<Lead>): Promise<Partial<Lead>> {

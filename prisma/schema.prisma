@@ -41,8 +41,118 @@ model Lead {
   attachments    LeadAttachment[]
   stageHistory   PipelineStageEntry[]
 
+  // New AI & Score Fields
+  opportunityScore    Float?
+  competitionScore    Float?
+  growthScore         Float?
+  seoWeakness         Float?
+  websiteQuality      Float?
+  reviewReputation    Float?
+  aiScoreLastComputed DateTime?
+  aiScoreInputsHash   String?
+  latitude            Float?
+  longitude           Float?
+
+  // Relations to new tables
+  enrichment       LeadEnrichment?
+  opportunity      LeadOpportunity?
+  outreachMessages OutreachMessage[]
+  websiteIntel     LeadWebsiteIntelligence?
+  backgroundJobs   BackgroundJob[]
+
   @@index([organizationId, pipelineStage])
+  @@index([organizationId, aiScore])
+  @@index([city, category])
+  @@index([latitude, longitude])
+  @@index([pipelineStage])
   @@unique([organizationId, phone])
+}
+
+model LeadEnrichment {
+  id                     String    @id @default(cuid())
+  leadId                 String    @unique
+  lead                   Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  emails                 String[]
+  additionalPhones       String[]
+  linkedinUrl            String?
+  facebookUrl            String?
+  instagramUrl           String?
+  tiktokUrl              String?
+  youtubeUrl             String?
+  businessSize           String?
+  revenueEstimate        String?
+  industryClassification String?
+  generatedDescription   String?
+  status                 String    @default("not_attempted")
+  confidenceLevel        String?
+  evidenceTrail          Json?
+  lastRunAt              DateTime?
+}
+
+model LeadOpportunity {
+  id                        String   @id @default(cuid())
+  leadId                    String   @unique
+  lead                      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  detectedGaps              Json?
+  recommendedService        String?
+  recommendedServiceDetails String?
+  estimatedDealValue        Float?
+  dealValueBreakdown        Json?
+  conversionProbability     Float?
+  conversionFactors         Json?
+  confidenceLevel           String?
+}
+
+model OutreachMessage {
+  id               String   @id @default(cuid())
+  leadId           String
+  lead             Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  channel          String   // email, linkedin, whatsapp, proposal_intro
+  subject          String?
+  body             String
+  editedByHuman    Boolean  @default(false)
+  modelGeneratedBy String?
+  generatedAt      DateTime @default(now())
+
+  @@unique([leadId, channel])
+}
+
+model LeadWebsiteIntelligence {
+  id                   String    @id @default(cuid())
+  leadId               String    @unique
+  lead                 Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  reachable            Boolean?
+  isHttps              Boolean?
+  hasViewportMeta      Boolean?
+  seoScore             Float?
+  performanceScore     Float?
+  loadTimeMs           Int?
+  hasAnalytics         Boolean?
+  analyticsTools       String[]
+  hasChatbot           Boolean?
+  chatbotTools         String[]
+  detectedTechnologies Json?
+  hasTitle             Boolean?
+  hasMetaDescription   Boolean?
+  hasStructuredData    Boolean?
+  missingAltCount      Int?
+  totalImgTags         Int?
+  lastCheckedAt        DateTime?
+}
+
+model BackgroundJob {
+  id           String    @id @default(cuid())
+  leadId       String
+  lead         Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  jobType      String    // website-intelligence, enrichment, scoring, opportunity
+  status       String    @default("queued")
+  errorMessage String?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([leadId])
+  @@index([status])
 }
 
 model LeadNote {
