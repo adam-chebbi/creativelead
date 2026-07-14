@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id            // Clerk orgId
+  name      String
+  createdAt DateTime @default(now())
+  leads     Lead[]
+  campaigns Campaign[]
+  auditLogs AuditLog[]
+}
+
+model Lead {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  businessName   String
+  category       String?
+  address        String?
+  city           String?
+  phone          String?
+  website        String?
+  email          String?
+  rating         Float?
+  reviewCount    Int?
+  aiScore        Float?
+  classification String?
+  pipelineStage  String   @default("new")
+  ownerId        String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  notes          LeadNote[]
+  followUps      FollowUp[]
+  attachments    LeadAttachment[]
+  stageHistory   PipelineStageEntry[]
+
+  @@index([organizationId, pipelineStage])
+  @@unique([organizationId, phone])
+}
+
+model LeadNote {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields:[leadId], references:[id])
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model FollowUp {
+  id           String   @id @default(cuid())
+  leadId       String
+  lead         Lead     @relation(fields:[leadId], references:[id])
+  dueAt        DateTime
+  assignedToId String
+  status       String   @default("pending")
+}
+
+model LeadAttachment {
+  id           String   @id @default(cuid())
+  leadId       String
+  lead         Lead     @relation(fields:[leadId], references:[id])
+  fileUrl      String
+  uploadedById String
+}
+
+model PipelineStageEntry {
+  id         String   @id @default(cuid())
+  leadId     String
+  lead       Lead     @relation(fields:[leadId], references:[id])
+  stage      String
+  enteredAt  DateTime @default(now())
+  movedById  String
+}
+
+model Campaign {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  channel        String
+  status         String       @default("draft")
+  createdById    String
+  createdAt      DateTime     @default(now())
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  actorId        String
+  action         String
+  targetType     String?
+  targetId       String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+}
