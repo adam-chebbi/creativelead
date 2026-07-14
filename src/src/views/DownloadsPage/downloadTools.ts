@@ -26,7 +26,7 @@ export const downloadTools: DownloadTool[] = [
       'Resume from where you left off',
       'EN + FR locale support',
     ],
-    href: '/downloads/creativelead-extension.zip',
+    href: '/downloads/browserextractor.zip',
     label: 'Download .zip',
   }
 ];
