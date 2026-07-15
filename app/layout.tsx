@@ -1,6 +1,7 @@
 import React from "react";
 import "@/index.css";
 import "@/styles.css";
+import { QueryProvider } from "@/hooks";
 
 export const metadata = {
   title: "CreativeLead",
@@ -17,7 +18,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <QueryProvider>{children}</QueryProvider>
+      </body>
     </html>
   );
 }

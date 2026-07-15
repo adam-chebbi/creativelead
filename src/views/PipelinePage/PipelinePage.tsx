@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Lead, PipelineStage, PipelineStageEntry, FollowUp } from '@/types';
-import { useLeadStore } from '@/hooks';
+import { useLeadsQuery, useLeadUpdateMutation } from '@/hooks';
 import { Button, PipelineStageBadge, PIPELINE_STAGES, STAGE_LABELS, Badge, Spinner } from '@/components/ui';
 import { aggregateSentiment, SENTIMENT_LABEL, SENTIMENT_COLOR } from '@/sentiment';
 import { countRealReviews } from '@/utils/reviews';
@@ -11,39 +11,25 @@ import { LeadDetailModal } from '../../components/pipeline/LeadDetailModal';
 import { getAllFollowUps, markFollowUpCompleted } from '@/db';
 
 export const PipelinePage: React.FC = () => {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [showFollowUpsView, setShowFollowUpsView] = useState(false);
   const [dragLead, setDragLead] = useState<string | null>(null);
 
-  const { getAllLeads, updateLead } = useLeadStore();
+  const { data: leads = [], isLoading, refetch } = useLeadsQuery();
+  const updateLeadMutation = useLeadUpdateMutation();
 
-  const reload = useCallback(() => {
-    setLoading(true);
-    getAllLeads().then(all => {
-      // Migrate old stage values
-      const migrated = all.map(l => {
-        if ((l._stage as string) === 'closed') {
-          updateLead(l.google_maps_url || '', { _stage: 'lost' as PipelineStage, _wonLostReason: 'Migrated from old "Closed" stage' });
-          return { ...l, _stage: 'lost' as PipelineStage, _wonLostReason: 'Migrated from old "Closed" stage' };
-        }
-        if (!l._stage) return { ...l, _stage: 'new' as PipelineStage };
-        return l;
-      });
-      setLeads(migrated);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, [getAllLeads]);
+  const handleUpdateLead = useCallback((id: string, data: Partial<Lead>) => {
+    updateLeadMutation.mutate({ id, data });
+  }, [updateLeadMutation]);
 
   const reloadFollowUps = useCallback(async () => {
     const all = await getAllFollowUps();
     setFollowUps(all);
   }, []);
 
-  useEffect(() => { reload(); reloadFollowUps(); }, []);
+  useEffect(() => { reloadFollowUps(); }, []);
 
   // Group leads by stage
   const grouped = PIPELINE_STAGES.reduce((acc, s) => {
@@ -96,16 +82,16 @@ export const PipelinePage: React.FC = () => {
     const stageEntry: PipelineStageEntry = { stage: currentStage, enteredAt: lead._stageEnteredAt || new Date().toISOString() };
     const history = Array.isArray(lead._stageHistory) ? [...lead._stageHistory, stageEntry] : [stageEntry];
 
-    await updateLead(url, { _stage: targetStage, _stageHistory: history, _stageEnteredAt: new Date().toISOString() } as Partial<Lead>);
+    handleUpdateLead(url, { _stage: targetStage, _stageHistory: history, _stageEnteredAt: new Date().toISOString() } as Partial<Lead>);
     setDragLead(null);
-    reload();
+    refetch();
   };
 
   const handleStageChangeInModal = async (updates: Partial<Lead>) => {
     const url = activeLead?.google_maps_url;
     if (!url) return;
-    await updateLead(url, updates);
-    reload();
+    handleUpdateLead(url, updates);
+    refetch();
     setActiveLead(null);
   };
 
@@ -164,8 +150,8 @@ export const PipelinePage: React.FC = () => {
           </div>
         </div>
 
-        {loading ? (
-          <div className="pipeline-empty-state"><Spinner className="spinner-block" /><p>Loading leads from local storage…</p></div>
+        {isLoading ? (
+          <div className="pipeline-empty-state"><Spinner className="spinner-block" /><p>Loading leads…</p></div>
         ) : showFollowUpsView ? (
           <div className="followups-full-view">
             {overdue.length > 0 && (
@@ -283,7 +269,7 @@ export const PipelinePage: React.FC = () => {
         )}
 
         {/* Won/Lost report zone */}
-        {!loading && !showFollowUpsView && (wonLeads.length > 0 || lostLeads.length > 0) && (
+        {!isLoading && !showFollowUpsView && (wonLeads.length > 0 || lostLeads.length > 0) && (
           <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)' }}>
             <h3 style={{ fontSize: '0.95rem', marginBottom: '0.75rem' }}>Closed Deals Summary</h3>
             {wonLeads.length > 0 && (
@@ -318,8 +304,8 @@ export const PipelinePage: React.FC = () => {
                 history.push({ stage: (activeLead._stage as PipelineStage) || 'new', enteredAt: activeLead._stageEnteredAt || new Date().toISOString() });
                 updates._stageHistory = history;
               }
-              await updateLead(url, updates);
-              reload();
+              handleUpdateLead(url, updates);
+              refetch();
             }
             setActiveLead(null);
           }}

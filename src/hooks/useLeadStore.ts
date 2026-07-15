@@ -65,7 +65,7 @@ function normaliseServerLead(s: ServerLead): Lead {
   } as Lead;
 }
 
-async function patchLeadOnServer(serverId: string, data: Partial<Lead>): Promise<void> {
+export async function patchLeadOnServer(serverId: string, data: Partial<Lead>): Promise<void> {
   try {
     await apiRequest(`/api/leads/${serverId}`, {
       method: 'PATCH',
