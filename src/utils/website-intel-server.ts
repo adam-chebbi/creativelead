@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { scoreLeadById } from './score-lead-server';
+import { analyzeOpportunity } from './opportunity-server';
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 15000;
@@ -623,6 +624,12 @@ export async function analyzeWebsiteServer(
     await scoreLeadById(leadId, orgId);
   } catch (err) {
     console.error(`[website-intel] rescore failed for ${leadId}:`, err);
+  }
+
+  try {
+    await analyzeOpportunity(leadId, orgId);
+  } catch (err) {
+    console.error(`[website-intel] opportunity analysis failed for ${leadId}:`, err);
   }
 
   return { ok: true };

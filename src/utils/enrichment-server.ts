@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { scoreLeadById } from './score-lead-server';
+import { analyzeOpportunity } from './opportunity-server';
 
 const FETCH_TIMEOUT_MS = 15000;
 const COOLDOWN_MS = 5 * 60 * 1000;
@@ -623,11 +624,16 @@ export async function enrichLead(
         : undefined,
     });
 
-    // Trigger rescoring after enrichment
+    // Trigger rescoring + opportunity analysis after enrichment
     try {
       await scoreLeadById(leadId, orgId);
     } catch (err) {
       console.error(`[enrichment] rescore failed for ${leadId}:`, err);
+    }
+    try {
+      await analyzeOpportunity(leadId, orgId);
+    } catch (err) {
+      console.error(`[enrichment] opportunity analysis failed for ${leadId}:`, err);
     }
 
     // Update background job
