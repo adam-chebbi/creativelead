@@ -1,6 +1,26 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import { generateAndPersistMessage, generateAllMessagesForLead, batchGenerateMessages } from '@/utils/outreach-server';
+
+const CHANNEL_MAP_REVERSE: Record<string, string> = {
+  email: 'email',
+  linkedin: 'linkedin',
+  whatsapp: 'whatsapp',
+  proposal_intro: 'proposalIntro',
+};
+
+async function fetchMessagesForLead(leadId: string) {
+  const records = await prisma.outreachMessage.findMany({
+    where: { leadId },
+  });
+  const messages: Record<string, { subject?: string; body: string; edited: boolean }> = {};
+  for (const r of records) {
+    const key = CHANNEL_MAP_REVERSE[r.channel] || r.channel;
+    messages[key] = { subject: r.subject || undefined, body: r.body, edited: r.editedByHuman };
+  }
+  return messages;
+}
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   let userId, orgId;
@@ -39,11 +59,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       if (!result.ok) {
         return NextResponse.json({ error: result.error || 'Generation failed' }, { status: 500 });
       }
-      return NextResponse.json({ ok: true });
+      const allMessages = await fetchMessagesForLead(params.id);
+      return NextResponse.json({ ok: true, messages: allMessages });
     }
 
     const result = await generateAllMessagesForLead(params.id, orgId, aiConfig);
-    return NextResponse.json(result);
+    const allMessages = await fetchMessagesForLead(params.id);
+    return NextResponse.json({ ok: true, messages: allMessages, results: result.results });
   } catch (error) {
     console.error('[OUTREACH_POST]', error);
     return NextResponse.json({ error: 'Internal Error' }, { status: 500 });

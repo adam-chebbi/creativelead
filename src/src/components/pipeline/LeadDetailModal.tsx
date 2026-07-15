@@ -3,10 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Lead, OpportunityGap, DealValueBreakdown, ConversionFactor, OutreachMessages, PipelineStage, PipelineStageEntry, LeadNote, LeadAttachment, FollowUp } from '@/types';
 import { Button } from '@/components/ui';
 import { PIPELINE_STAGES, STAGE_LABELS, PipelineStageBadge } from '@/components/ui';
-import { generateAIScores, generateLiveEnrichment } from '@/utils/scoring';
+import { generateAIScores } from '@/utils/scoring';
 import { analyzeWebsite } from '@/utils/website-intelligence';
-import { analyzeOpportunity } from '@/utils/opportunity-detector';
-import { generateAllMessages, generateMessage, OUTREACH_CHANNELS, ChannelSpec } from '@/utils/outreach-generator';
+import { OUTREACH_CHANNELS, ChannelSpec } from '@/utils/outreach-generator';
+import { apiRequest } from '@/utils/api-request';
+import { getSettings } from '@/hooks/useSettingsStore';
 import { getLeadNotes, saveLeadNote, deleteLeadNote, getLeadAttachments, saveLeadAttachment, deleteLeadAttachment, getLeadFollowUps, saveLeadFollowUp, deleteLeadFollowUp, generateId } from '@/db';
 
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
@@ -188,25 +189,30 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({ lead, onClose,
     setLoadingEnrichment(true);
     setEnrichmentError(null);
     try {
-      const newEnrichment = await generateLiveEnrichment(lead);
-      setEnrichment({
-        business_size: newEnrichment.business_size,
-        revenue_estimation: newEnrichment.revenue_estimation,
-        industry_classification: newEnrichment.industry_classification,
-        generated_description: newEnrichment.generated_description,
-      });
-      setFormData(prev => ({
-        ...prev,
-        linkedin: prev.linkedin || newEnrichment.linkedin || '',
-        facebook: prev.facebook || newEnrichment.facebook || '',
-        instagram: prev.instagram || newEnrichment.instagram || '',
-        tiktok: prev.tiktok || newEnrichment.tiktok || '',
-        youtube: prev.youtube || newEnrichment.youtube || '',
-        emails: prev.emails || newEnrichment.emails?.join(', ') || '',
-        additional_phones: prev.additional_phones || newEnrichment.additional_phones?.join(', ') || '',
-      }));
-      if (newEnrichment.enrichment_status === 'failed') {
-        setEnrichmentError(newEnrichment.enrichment_error || 'Enrichment failed');
+      const res = await apiRequest(`/api/leads/${lead._serverId}/enrichment?force=true`, { method: 'POST' });
+      const json = await res.json();
+      if (!json.ok) {
+        setEnrichmentError(json.error || 'Enrichment failed');
+      } else if (json.data) {
+        setEnrichment({
+          business_size: json.data.business_size,
+          revenue_estimation: json.data.revenue_estimation,
+          industry_classification: json.data.industry_classification,
+          generated_description: json.data.generated_description,
+        });
+        setFormData(prev => ({
+          ...prev,
+          linkedin: prev.linkedin || json.data.linkedin || '',
+          facebook: prev.facebook || json.data.facebook || '',
+          instagram: prev.instagram || json.data.instagram || '',
+          tiktok: prev.tiktok || json.data.tiktok || '',
+          youtube: prev.youtube || json.data.youtube || '',
+          emails: prev.emails || json.data.emails?.join(', ') || '',
+          additional_phones: prev.additional_phones || json.data.additional_phones?.join(', ') || '',
+        }));
+        if (json.data.enrichment_status === 'failed') {
+          setEnrichmentError('Enrichment completed but found no data');
+        }
       }
     } catch (err) {
       setEnrichmentError('Enrichment error: ' + (err instanceof Error ? err.message : 'Unknown error'));
@@ -233,35 +239,65 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({ lead, onClose,
     }
   };
 
-  const handleRunOpportunity = () => {
+  const handleRunOpportunity = async () => {
     setLoadingOpportunity(true);
     try {
-      const result = analyzeOpportunity(lead);
-      setOpportunity({
-        gaps: result.opportunity_gaps || [],
-        service: result.recommended_service || '',
-        details: result.recommended_service_details || '',
-        value: result.estimated_deal_value ?? null,
-        breakdown: result.deal_value_breakdown,
-        probability: result.conversion_probability ?? null,
-        factors: result.conversion_factors,
-        confidence: result.opportunity_confidence ?? null,
-      });
+      const res = await apiRequest(`/api/leads/${lead._serverId}/opportunity`, { method: 'POST' });
+      const json = await res.json();
+      if (json.ok && json.data) {
+        setOpportunity({
+          gaps: json.data.gaps || [],
+          service: json.data.service || '',
+          details: json.data.details || '',
+          value: json.data.value ?? null,
+          breakdown: json.data.breakdown,
+          probability: json.data.probability != null ? json.data.probability * 100 : null,
+          factors: json.data.factors,
+          confidence: json.data.confidence || null,
+        });
+      }
+    } catch (err) {
+      console.error('Opportunity analysis error:', err);
     } finally {
       setLoadingOpportunity(false);
     }
   };
 
+  function getAiConfig() {
+    const s = getSettings();
+    let provider = s.aiProvider;
+    let model = s.aiModel;
+    let apiKey = '';
+    let apiBase: string | undefined;
+    if (provider === 'gemini') { apiKey = s.geminiApiKey; }
+    else if (provider === 'openai') { apiKey = s.openAiKey; }
+    else if (provider === 'openrouter') { apiKey = s.openrouterApiKey; }
+    else if (provider === 'groq') { apiKey = s.groqApiKey; }
+    else if (provider === 'anthropic') { apiKey = s.anthropicApiKey; }
+    else if (provider === 'mistral') { apiKey = s.mistralApiKey; }
+    else if (provider === 'cohere') { apiKey = s.cohereApiKey; }
+    else if (provider === 'custom') { apiKey = s.customApiKey; model = s.customModel; apiBase = s.customApiBase; }
+    return { provider, model, apiKey, apiBase };
+  }
+
   const handleGenerateOutreach = async () => {
     setLoadingOutreach(true);
     setOutreachError(null);
     try {
-      const result = await generateAllMessages(lead);
-      if (result.ok) {
-        setOutreachMsgs(result.messages);
+      const aiConfig = getAiConfig();
+      const res = await apiRequest(`/api/leads/${lead._serverId}/outreach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'all', ...aiConfig }),
+      });
+      const json = await res.json();
+      if (json.ok && json.messages) {
+        setOutreachMsgs({
+          ...json.messages,
+          generatedAt: new Date().toISOString(),
+        });
       } else {
-        const errs = Object.values(result.errors).join('; ');
-        setOutreachError(errs || 'Failed. Check API key in Settings.');
+        setOutreachError(json.error || 'Failed. Check API key in Settings.');
       }
     } catch (err) {
       setOutreachError('Unexpected error: ' + (err instanceof Error ? err.message : 'Unknown'));
@@ -273,16 +309,20 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({ lead, onClose,
   const handleRegenerateSingle = async (spec: ChannelSpec) => {
     setRegeneratingKey(spec.key);
     try {
-      const result = await generateMessage(spec, lead);
-      if (result.ok) {
-        const updated: OutreachMessages = {
-          ...(outreachMsgs || { email: { body: '', edited: false }, linkedin: { body: '', edited: false }, whatsapp: { body: '', edited: false }, proposalIntro: { body: '', edited: false }, generatedAt: new Date().toISOString() }),
-          [spec.key]: result.message,
+      const aiConfig = getAiConfig();
+      const res = await apiRequest(`/api/leads/${lead._serverId}/outreach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: spec.key, ...aiConfig }),
+      });
+      const json = await res.json();
+      if (json.ok && json.messages) {
+        setOutreachMsgs(prev => ({
+          ...json.messages,
           generatedAt: new Date().toISOString(),
-        };
-        setOutreachMsgs(updated);
+        }));
       } else {
-        setOutreachError(result.error);
+        setOutreachError(json.error || 'Regeneration failed');
       }
     } finally {
       setRegeneratingKey(null);

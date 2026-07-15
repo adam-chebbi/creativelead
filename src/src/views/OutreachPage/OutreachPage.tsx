@@ -3,7 +3,9 @@ import { motion } from 'framer-motion';
 import { Lead, OutreachMessages, OutreachMessage } from '@/types';
 import { Button, Badge, Card, Spinner } from '@/components/ui';
 import { useLeadStore } from '@/hooks';
-import { generateMessage, generateAllMessages, OUTREACH_CHANNELS, ChannelSpec } from '@/utils/outreach-generator';
+import { OUTREACH_CHANNELS, ChannelSpec } from '@/utils/outreach-generator';
+import { apiRequest } from '@/utils/api-request';
+import { getSettings } from '@/hooks/useSettingsStore';
 import { fadeInUp, staggerContainer, defaultTransition } from '@/animations';
 
 export const OutreachPage: React.FC = () => {
@@ -37,22 +39,46 @@ export const OutreachPage: React.FC = () => {
     setEditingKey(null);
   };
 
+  function getAiConfig() {
+    const s = getSettings();
+    let provider = s.aiProvider;
+    let model = s.aiModel;
+    let apiKey = '';
+    let apiBase: string | undefined;
+    if (provider === 'gemini') { apiKey = s.geminiApiKey; }
+    else if (provider === 'openai') { apiKey = s.openAiKey; }
+    else if (provider === 'openrouter') { apiKey = s.openrouterApiKey; }
+    else if (provider === 'groq') { apiKey = s.groqApiKey; }
+    else if (provider === 'anthropic') { apiKey = s.anthropicApiKey; }
+    else if (provider === 'mistral') { apiKey = s.mistralApiKey; }
+    else if (provider === 'cohere') { apiKey = s.cohereApiKey; }
+    else if (provider === 'custom') { apiKey = s.customApiKey; model = s.customModel; apiBase = s.customApiBase; }
+    return { provider, model, apiKey, apiBase };
+  }
+
   const handleGenerateAll = async () => {
     if (!selectedLead) return;
     setLoading('all');
     setError(null);
     try {
-      const result = await generateAllMessages(selectedLead);
-      if (result.ok) {
-        setMessages(result.messages);
+      const aiConfig = getAiConfig();
+      const serverId = selectedLead._serverId || selectedLead.google_maps_url?.replace('server:', '');
+      const res = await apiRequest(`/api/leads/${serverId}/outreach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'all', ...aiConfig }),
+      });
+      const json = await res.json();
+      if (json.ok && json.messages) {
+        setMessages({
+          ...json.messages,
+          generatedAt: new Date().toISOString(),
+        });
         if (selectedLead.google_maps_url) {
-          await updateLead(selectedLead.google_maps_url, {
-            outreach_messages: result.messages,
-          });
+          await updateLead(selectedLead.google_maps_url, { outreach_messages: json.messages });
         }
       } else {
-        const errs = Object.values(result.errors).join('; ');
-        setError(errs || 'Failed to generate messages. Check API key in Settings.');
+        setError(json.error || 'Failed to generate messages. Check API key in Settings.');
       }
     } catch (err) {
       setError('Unexpected error: ' + (err instanceof Error ? err.message : 'Unknown'));
@@ -66,11 +92,18 @@ export const OutreachPage: React.FC = () => {
     setRegeneratingKey(spec.key);
     setError(null);
     try {
-      const result = await generateMessage(spec, selectedLead);
-      if (result.ok) {
+      const aiConfig = getAiConfig();
+      const serverId = selectedLead._serverId || selectedLead.google_maps_url?.replace('server:', '');
+      const res = await apiRequest(`/api/leads/${serverId}/outreach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: spec.key, ...aiConfig }),
+      });
+      const json = await res.json();
+      if (json.ok && json.messages) {
         const updated: OutreachMessages = {
           ...(messages || { email: { body: '', edited: false }, linkedin: { body: '', edited: false }, whatsapp: { body: '', edited: false }, proposalIntro: { body: '', edited: false }, generatedAt: new Date().toISOString() }),
-          [spec.key]: result.message,
+          ...json.messages,
           generatedAt: new Date().toISOString(),
         };
         setMessages(updated);
@@ -78,7 +111,7 @@ export const OutreachPage: React.FC = () => {
           await updateLead(selectedLead.google_maps_url, { outreach_messages: updated });
         }
       } else {
-        setError(result.error);
+        setError(json.error || 'Regeneration failed');
       }
     } finally {
       setRegeneratingKey(null);
