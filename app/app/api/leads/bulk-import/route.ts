@@ -5,6 +5,7 @@ import { rateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { scoreLeadById, generateImportReport } from '@/utils/score-lead-server';
 import { queueWebsiteIntel } from '@/utils/website-intel-server';
+import { queueEnrichment } from '@/utils/enrichment-server';
 
 const leadSchema = z.object({
   business_name: z.string(),
@@ -96,6 +97,9 @@ export async function POST(req: Request) {
         if (lead.website) {
           queueWebsiteIntel(lead.id, orgId).catch((err) =>
             console.error(`[BULK_IMPORT] website intel failed for ${lead.id}:`, err)
+          );
+          queueEnrichment(lead.id, orgId).catch((err) =>
+            console.error(`[BULK_IMPORT] enrichment failed for ${lead.id}:`, err)
           );
         }
       }
