@@ -17,7 +17,7 @@ export const PipelinePage: React.FC = () => {
   const [showFollowUpsView, setShowFollowUpsView] = useState(false);
   const [dragLead, setDragLead] = useState<string | null>(null);
 
-  const { data: leads = [], isLoading, refetch } = useLeadsQuery();
+  const { data: leads = [], isLoading, isError, error, refetch } = useLeadsQuery();
   const updateLeadMutation = useLeadUpdateMutation();
 
   const handleUpdateLead = useCallback((id: string, data: Partial<Lead>) => {
@@ -150,8 +150,14 @@ export const PipelinePage: React.FC = () => {
           </div>
         </div>
 
-        {loading ? (
-          <div className="pipeline-empty-state"><Spinner className="spinner-block" /><p>Loading leads from local storage…</p></div>
+        {isLoading ? (
+          <div className="pipeline-empty-state"><Spinner className="spinner-block" /><p>Loading leads…</p></div>
+        ) : isError ? (
+          <div className="pipeline-empty-state">
+            <p className="pipeline-empty-title" style={{ color: 'var(--color-danger)' }}>Failed to load leads</p>
+            <p className="pipeline-empty-desc">{error instanceof Error ? error.message : 'An unexpected error occurred.'}</p>
+            <Button variant="primary" onClick={() => refetch()} style={{ marginTop: '1rem' }}>Retry</Button>
+          </div>
         ) : showFollowUpsView ? (
           <div className="followups-full-view">
             {overdue.length > 0 && (
@@ -269,7 +275,7 @@ export const PipelinePage: React.FC = () => {
         )}
 
         {/* Won/Lost report zone */}
-        {!loading && !showFollowUpsView && (wonLeads.length > 0 || lostLeads.length > 0) && (
+        {!isLoading && !showFollowUpsView && (wonLeads.length > 0 || lostLeads.length > 0) && (
           <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)' }}>
             <h3 style={{ fontSize: '0.95rem', marginBottom: '0.75rem' }}>Closed Deals Summary</h3>
             {wonLeads.length > 0 && (

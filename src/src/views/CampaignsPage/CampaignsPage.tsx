@@ -24,6 +24,7 @@ export const CampaignsPage: React.FC = () => {
   const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null);
   const [schedulerOn, setSchedulerOn] = useState(false);
   const [todayCount, setTodayCount] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sendingInProgress, setSendingInProgress] = useState(false);
 
@@ -47,6 +48,7 @@ export const CampaignsPage: React.FC = () => {
 
   const reload = useCallback(async () => {
     setError(null);
+    setLoading(true);
     try {
       const [c, l] = await Promise.all([getAllCampaigns(), fetchLeads()]);
       setCampaigns(c);
@@ -54,6 +56,8 @@ export const CampaignsPage: React.FC = () => {
       setTodayCount(await getTodayCount());
     } catch (err) {
       setError('Failed to load campaigns: ' + (err instanceof Error ? err.message : 'Unknown'));
+    } finally {
+      setLoading(false);
     }
   }, [fetchLeads]);
 
@@ -245,9 +249,14 @@ export const CampaignsPage: React.FC = () => {
         </div>
       </motion.div>
 
-      {error && <div className="alert alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
+      {error && <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+        {error}
+        <Button size="sm" variant="ghost" onClick={reload} style={{ marginLeft: '0.75rem' }}>Retry</Button>
+      </div>}
 
-      {tab === 'list' && (
+      {loading && tab === 'list' ? (
+        <div className="pipeline-empty-state"><Spinner className="spinner-block" /><p>Loading campaigns…</p></div>
+      ) : tab === 'list' ? (
         <motion.div variants={fadeInUp} transition={defaultTransition}>
           {campaigns.length === 0 ? (
             <div className="outreach-placeholder" style={{ marginTop: '1rem' }}>
@@ -280,7 +289,7 @@ export const CampaignsPage: React.FC = () => {
             </div>
           )}
         </motion.div>
-      )}
+      ) : null}
 
       {tab === 'create' && (
         <motion.div variants={fadeInUp} transition={defaultTransition}>

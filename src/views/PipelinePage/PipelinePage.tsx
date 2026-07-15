@@ -17,7 +17,7 @@ export const PipelinePage: React.FC = () => {
   const [showFollowUpsView, setShowFollowUpsView] = useState(false);
   const [dragLead, setDragLead] = useState<string | null>(null);
 
-  const { data: leads = [], isLoading, refetch } = useLeadsQuery();
+  const { data: leads = [], isLoading, isError, error, refetch } = useLeadsQuery();
   const updateLeadMutation = useLeadUpdateMutation();
 
   const handleUpdateLead = useCallback((id: string, data: Partial<Lead>) => {
@@ -152,6 +152,12 @@ export const PipelinePage: React.FC = () => {
 
         {isLoading ? (
           <div className="pipeline-empty-state"><Spinner className="spinner-block" /><p>Loading leads…</p></div>
+        ) : isError ? (
+          <div className="pipeline-empty-state">
+            <p className="pipeline-empty-title" style={{ color: 'var(--color-danger)' }}>Failed to load leads</p>
+            <p className="pipeline-empty-desc">{error instanceof Error ? error.message : 'An unexpected error occurred.'}</p>
+            <Button variant="primary" onClick={() => refetch()} style={{ marginTop: '1rem' }}>Retry</Button>
+          </div>
         ) : showFollowUpsView ? (
           <div className="followups-full-view">
             {overdue.length > 0 && (

@@ -31,6 +31,7 @@ function RecLeadCard({ ranked, lead, index, onClick }: { ranked: any; lead: Lead
 export const RecommendationsPage: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RecommendationEngineResult | null>(null);
   const [activeTab, setActiveTab] = useState<'ranked' | 'similar' | 'nearby' | 'gaps' | 'conversion' | 'filters'>('ranked');
   const [selectedLeadUrl, setSelectedLeadUrl] = useState<string>('');
@@ -39,14 +40,22 @@ export const RecommendationsPage: React.FC = () => {
 
   const { getAllLeads, updateLead } = useLeadStore();
 
-  useEffect(() => {
-    getAllLeads().then(all => {
+  const loadData = useCallback(async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const all = await getAllLeads();
       setLeads(all);
       const res = computeRecommendations(all, undefined);
       setResult(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load leads.');
+    } finally {
       setLoading(false);
-    });
-  }, []);
+    }
+  }, [getAllLeads]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const recompute = useCallback((allLeads: Lead[], refUrl: string) => {
     const res = computeRecommendations(allLeads, refUrl || undefined);
@@ -118,6 +127,12 @@ export const RecommendationsPage: React.FC = () => {
 
         {loading ? (
           <div className="pipeline-empty-state"><Spinner className="spinner-block" /><p>Computing recommendations…</p></div>
+        ) : error ? (
+          <div className="pipeline-empty-state">
+            <p className="pipeline-empty-title" style={{ color: 'var(--color-danger)' }}>Failed to load recommendations</p>
+            <p className="pipeline-empty-desc">{error}</p>
+            <Button variant="primary" onClick={loadData} style={{ marginTop: '1rem' }}>Retry</Button>
+          </div>
         ) : !result || result.rankedLeads.length === 0 ? (
           <div className="pipeline-empty-state"><p className="pipeline-empty-title">No leads found.</p><p className="pipeline-empty-desc">Import leads first to see recommendations.</p></div>
         ) : (

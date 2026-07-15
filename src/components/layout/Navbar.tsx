@@ -22,7 +22,11 @@ export const Navbar: React.FC = () => {
   }, []);
 
   const handleSignOut = async () => {
-    await fetch("/api/auth/sign-out", { method: "POST" });
+    try {
+      await fetch("/api/auth/sign-out", { method: "POST" });
+    } catch {
+      // Best-effort sign-out — proceed even if the server call fails
+    }
     router.push("/sign-in");
   };
 
