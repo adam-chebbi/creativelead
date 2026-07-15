@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lead, OpportunityGap, DealValueBreakdown, ConversionFactor, OutreachMessages, PipelineStage, PipelineStageEntry, LeadNote, LeadAttachment, FollowUp } from '@/types';
-import { Button } from '@/components/ui';
-import { PIPELINE_STAGES, STAGE_LABELS, PipelineStageBadge } from '@/components/ui';
+import { Lead, OutreachMessages, PipelineStage, PipelineStageEntry, LeadNote, LeadAttachment, FollowUp } from '@/types';
+import { Button, PIPELINE_STAGES, STAGE_LABELS, PipelineStageBadge } from '@/components/ui';
+import { GapIndicator } from './GapIndicator';
+import { ValueBreakdown } from './ValueBreakdown';
+import { ConversionFactors } from './ConversionFactors';
 import { generateAIScores } from '@/utils/scoring';
 import { analyzeWebsite } from '@/utils/website-intelligence';
 import { OUTREACH_CHANNELS, ChannelSpec } from '@/utils/outreach-generator';
@@ -12,59 +14,6 @@ import { getLeadNotes, saveLeadNote, deleteLeadNote, getLeadAttachments, saveLea
 
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/plain', ];
-
-const severityColors: Record<string, string> = {
-  critical: 'var(--color-danger)',
-  moderate: 'var(--color-warning)',
-  minor: 'var(--color-text-muted)',
-};
-
-const confidenceColors: Record<string, string> = {
-  high: 'var(--color-success)',
-  medium: 'var(--color-warning)',
-  low: 'var(--color-text-muted)',
-};
-
-function GapIndicator({ gap }: { gap: OpportunityGap }) {
-  return (
-    <div className={`opportunity-gap ${gap.detected ? 'detected' : 'ok'}`}>
-      <span className="gap-icon" style={{ color: gap.detected ? (gap.severity === 'critical' ? 'var(--color-danger)' : gap.severity === 'moderate' ? 'var(--color-warning)' : 'var(--color-text-muted)') : 'var(--color-success)' }}>
-        {gap.detected ? '✕' : '✓'}
-      </span>
-      <div className="gap-text">
-        <strong>{gap.label}</strong>
-        <span className="gap-detail">{gap.detail}</span>
-      </div>
-    </div>
-  );
-}
-
-function ValueBreakdown({ breakdown }: { breakdown: DealValueBreakdown | undefined }) {
-  if (!breakdown) return <p className="opportunity-muted">Not enough data to calculate breakdown</p>;
-  return (
-    <div className="value-breakdown">
-      <div className="breakdown-row"><span>Base service price</span><span>${breakdown.baseServicePrice.toLocaleString()}</span></div>
-      <div className="breakdown-row"><span>Gap multiplier ({breakdown.gapsFound} gaps × 0.15)</span><span>×{breakdown.gapMultiplier}</span></div>
-      <div className="breakdown-row"><span>Category adjustment ({breakdown.industry || 'general'})</span><span>×{breakdown.categoryAdjustment}</span></div>
-      <div className="breakdown-row total"><span>Estimated deal value</span><span>${breakdown.finalValue.toLocaleString()}</span></div>
-    </div>
-  );
-}
-
-function ConversionFactors({ factors }: { factors: ConversionFactor[] | undefined }) {
-  if (!factors || factors.length === 0) return <p className="opportunity-muted">Not enough data to compute factors</p>;
-  return (
-    <div className="conversion-factors">
-      {factors.map((f, i) => (
-        <div key={i} className={`factor-row impact-${f.impact}`}>
-          <span className="factor-name">{f.factor}</span>
-          <span className="factor-reason">{f.reason}</span>
-          <span className="factor-weight" style={{ color: f.impact === 'positive' ? 'var(--color-success)' : f.impact === 'negative' ? 'var(--color-danger)' : 'var(--color-text-muted)' }}>{f.weight > 0 ? '+' : ''}{f.weight}%</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 interface LeadDetailModalProps {
   lead: Lead;
