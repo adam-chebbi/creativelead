@@ -8,3 +8,6 @@ dist/
 build/
 .vite/
 ecosystem.config.cjs
+
+# Spec / prompt pack files
+creativelead-ai-features-prompt-packs.md
