@@ -17,7 +17,7 @@ export function startScheduler(onTick?: (results: { campaignId: string; leadUrl:
     } finally {
       isRunning = false;
     }
-  }, 15000);
+  }, 60000);
 }
 
 export function stopScheduler() {

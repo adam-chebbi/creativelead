@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Lead, Campaign, CampaignFollowUpStep, CampaignLedgerEntry } from '@/types';
 import { Button, Badge, Spinner, VirtualizedList } from '@/components/ui';
 
-import { useLeadStore } from '@/hooks';
+import { useLeadStore, useDebounce } from '@/hooks';
 import { getAllCampaigns, saveCampaign, getCampaignLedger, generateId, deleteCampaign } from '@/utils/campaign-db';
 import { sendEmail, sendSms, sendWhatsApp, getRecipientFromLead } from '@/utils/campaign-sender';
 import { startScheduler, stopScheduler, initializeCampaignSends, isSchedulerRunning, getTodayCount, markReplied } from '@/utils/campaign-scheduler';
@@ -42,6 +42,7 @@ export const CampaignsPage: React.FC = () => {
   const [formFollowUpSteps, setFormFollowUpSteps] = useState<CampaignFollowUpStep[]>(STEPS_DEFAULTS);
   const [selectedLeadUrls, setSelectedLeadUrls] = useState<Set<string>>(new Set());
   const [leadSearch, setLeadSearch] = useState('');
+  const debouncedLeadSearch = useDebounce(leadSearch, 250);
 
   const [creating, setCreating] = useState(false);
   const [campaignError, setCampaignError] = useState<string | null>(null);
@@ -89,12 +90,12 @@ export const CampaignsPage: React.FC = () => {
   };
 
   const filteredLeads = useMemo(() => leads.filter(l => {
-    const q = leadSearch.toLowerCase();
+    const q = debouncedLeadSearch.toLowerCase();
     if (!q) return true;
     return l.business_name.toLowerCase().includes(q) ||
            (l.city || '').toLowerCase().includes(q) ||
            (l.category || '').toLowerCase().includes(q);
-  }), [leads, leadSearch]);
+  }), [leads, debouncedLeadSearch]);
 
   const getRecipientLeads = useCallback((): string[] => {
     if (formRecipients === 'all') return leads.map(l => l.google_maps_url || '').filter(Boolean);
@@ -241,7 +242,7 @@ export const CampaignsPage: React.FC = () => {
           <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
             {todayCount > 0 ? `📅 ${todayCount} follow-up(s) today` : 'No sends scheduled'}
           </span>
-          <Button size="sm" variant={schedulerOn ? 'primary' : 'secondary'} onClick={toggleScheduler} title="Runs every 15 seconds while active">
+          <Button size="sm" variant={schedulerOn ? 'primary' : 'secondary'} onClick={toggleScheduler} title="Runs every 60 seconds while active">
             {schedulerOn ? 'Scheduler On' : 'Start Scheduler'}
           </Button>
           {tab === 'list' && <Button size="sm" variant="primary" onClick={() => { resetForm(); setTab('create'); }}>New Campaign</Button>}

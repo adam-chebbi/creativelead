@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import { motion } from 'framer-motion';
 import { Lead, PipelineStage, PipelineStageEntry, FollowUp } from '@/types';
 import { useLeadsQuery, useLeadUpdateMutation } from '@/hooks';
@@ -7,8 +7,9 @@ import { aggregateSentiment, SENTIMENT_LABEL, SENTIMENT_COLOR } from '@/sentimen
 import { countRealReviews } from '@/utils/reviews';
 import { formatRating } from '@/utils/format';
 import { fadeInUp, staggerContainer, defaultTransition } from '@/animations';
-import { LeadDetailModal } from '../../components/pipeline/LeadDetailModal';
 import { getAllFollowUps, markFollowUpCompleted } from '@/db';
+
+const LeadDetailModal = lazy(() => import('../../components/pipeline/LeadDetailModal').then(m => ({ default: m.LeadDetailModal })));
 
 export const PipelinePage: React.FC = () => {
   const [search, setSearch] = useState('');
@@ -294,23 +295,25 @@ export const PipelinePage: React.FC = () => {
       </div>
 
       {activeLead && (
-        <LeadDetailModal
-          lead={activeLead}
-          onClose={() => setActiveLead(null)}
-          onSave={async (updates) => {
-            const url = activeLead.google_maps_url || activeLead.maps_url;
-            if (url) {
-              if (updates._stage) {
-                const history = Array.isArray(activeLead._stageHistory) ? [...activeLead._stageHistory] : [];
-                history.push({ stage: (activeLead._stage as PipelineStage) || 'new', enteredAt: activeLead._stageEnteredAt || new Date().toISOString() });
-                updates._stageHistory = history;
+        <Suspense fallback={null}>
+          <LeadDetailModal
+            lead={activeLead}
+            onClose={() => setActiveLead(null)}
+            onSave={async (updates) => {
+              const url = activeLead.google_maps_url || activeLead.maps_url;
+              if (url) {
+                if (updates._stage) {
+                  const history = Array.isArray(activeLead._stageHistory) ? [...activeLead._stageHistory] : [];
+                  history.push({ stage: (activeLead._stage as PipelineStage) || 'new', enteredAt: activeLead._stageEnteredAt || new Date().toISOString() });
+                  updates._stageHistory = history;
+                }
+                handleUpdateLead(url, updates);
+                refetch();
               }
-              handleUpdateLead(url, updates);
-              refetch();
-            }
-            setActiveLead(null);
-          }}
-        />
+              setActiveLead(null);
+            }}
+          />
+        </Suspense>
       )}
     </motion.div>
   );

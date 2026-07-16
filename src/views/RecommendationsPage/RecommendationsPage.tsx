@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { Lead, PipelineStage } from '@/types';
 import { useLeadStore } from '@/hooks';
@@ -8,7 +8,8 @@ import { generateAIScores } from '@/utils/scoring';
 import { computeRecommendations } from '@/utils/recommendation-engine';
 import { RecommendationEngineResult, SmartFilterKey, SMART_FILTER_DEFS } from '@/utils/recommendation-types';
 import { fadeInUp, staggerContainer, defaultTransition } from '@/animations';
-import { LeadDetailModal } from '@/components/pipeline/LeadDetailModal';
+
+const LeadDetailModal = lazy(() => import('@/components/pipeline/LeadDetailModal').then(m => ({ default: m.LeadDetailModal })));
 
 const RecLeadCard = React.memo(function RecLeadCard({ ranked, lead, index, onClick }: { ranked: any; lead: Lead; index: number; onClick: () => void }) {
   const scores = generateAIScores(lead);
@@ -258,21 +259,23 @@ export const RecommendationsPage: React.FC = () => {
       </div>
 
       {activeLead && (
-        <LeadDetailModal
-          lead={activeLead}
-          onClose={() => setActiveLead(null)}
-          onSave={async (updates) => {
-            const url = activeLead.google_maps_url || activeLead.maps_url;
-            if (url) {
-              await updateLead(url, updates);
-              const all = await getAllLeads();
-              setLeads(all);
-              const res = computeRecommendations(all, selectedLeadUrl);
-              setResult(res);
-            }
-            setActiveLead(null);
-          }}
-        />
+        <Suspense fallback={null}>
+          <LeadDetailModal
+            lead={activeLead}
+            onClose={() => setActiveLead(null)}
+            onSave={async (updates) => {
+              const url = activeLead.google_maps_url || activeLead.maps_url;
+              if (url) {
+                await updateLead(url, updates);
+                const all = await getAllLeads();
+                setLeads(all);
+                const res = computeRecommendations(all, selectedLeadUrl);
+                setResult(res);
+              }
+              setActiveLead(null);
+            }}
+          />
+        </Suspense>
       )}
     </motion.div>
   );
