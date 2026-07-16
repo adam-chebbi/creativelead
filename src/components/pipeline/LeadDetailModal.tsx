@@ -37,15 +37,18 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({ lead, onClose,
     additional_phones: lead.additional_phones?.join(', ') || '',
   });
 
-  const [scores, setScores] = useState({
-    ai_score: lead.ai_score,
-    classification: lead.classification,
-    opportunity_score: lead.opportunity_score,
-    competition_score: lead.competition_score,
-    growth_score: lead.growth_score,
-    seo_weakness: lead.seo_weakness,
-    website_quality: lead.website_quality,
-    review_reputation: lead.review_reputation,
+  const [scores, setScores] = useState(() => {
+    const fresh = generateAIScores(lead);
+    return {
+      ai_score: fresh.ai_score ?? lead.ai_score,
+      classification: fresh.classification ?? lead.classification,
+      opportunity_score: fresh.opportunity_score ?? lead.opportunity_score,
+      competition_score: fresh.competition_score ?? lead.competition_score,
+      growth_score: fresh.growth_score ?? lead.growth_score,
+      seo_weakness: fresh.seo_weakness ?? lead.seo_weakness,
+      website_quality: fresh.website_quality ?? lead.website_quality,
+      review_reputation: fresh.review_reputation ?? lead.review_reputation,
+    };
   });
 
   const [enrichment, setEnrichment] = useState({

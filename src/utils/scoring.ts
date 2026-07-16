@@ -53,9 +53,22 @@ export function generateAIScores(lead: Partial<Lead>): Partial<Lead> {
   if (reviewCount === null || reviewCount === undefined) seo_weakness += 25;
   else if (reviewCount < 20) seo_weakness += 25;
 
+  const hasPhone = !!(lead.phone_number || lead.phone || lead.additional_phones?.length);
+  const hasEmail = !!(lead.email || lead.emails?.length);
+  const hasAddress = !!(lead.address || lead.city);
+  const hasReviews = !!(lead.reviews && lead.reviews.length > 0);
+  const hasCoords = !!(lead.latitude && lead.longitude);
+
+  const dataRichness = [hasPhone, hasEmail, hasAddress, hasWebsite, hasReviews, hasCoords].filter(Boolean).length / 6;
+
   let competition_score: number;
   if (reviewCount === null || reviewCount === undefined) {
     competition_score = 50;
+    if (hasReviews && lead.reviews) competition_score = Math.min(100, Math.round((lead.reviews.length / 500) * 100));
+    else if (hasCoords) competition_score = 35;
+    else if (hasPhone) competition_score = 40;
+    else if (hasEmail) competition_score = 30;
+    else competition_score = Math.round(50 - dataRichness * 20);
   } else {
     competition_score = Math.min(100, Math.round((reviewCount / 500) * 100));
   }
@@ -65,6 +78,9 @@ export function generateAIScores(lead: Partial<Lead>): Partial<Lead> {
     if (rating > 4.5 && (reviewCount ?? 0) < 50) growth_score += 20;
     else if (rating > 4.0) growth_score += 10;
     else if (rating < 3.0) growth_score -= 15;
+  } else {
+    if (hasReviews) growth_score += 10;
+    if (hasEmail) growth_score += 5;
   }
   growth_score = Math.round(Math.min(100, Math.max(0, growth_score)));
 
