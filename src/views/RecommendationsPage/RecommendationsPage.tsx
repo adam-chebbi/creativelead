@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Lead, PipelineStage } from '@/types';
 import { useLeadStore } from '@/hooks';
@@ -10,7 +10,7 @@ import { RecommendationEngineResult, SmartFilterKey, SMART_FILTER_DEFS } from '@
 import { fadeInUp, staggerContainer, defaultTransition } from '@/animations';
 import { LeadDetailModal } from '@/components/pipeline/LeadDetailModal';
 
-function RecLeadCard({ ranked, lead, index, onClick }: { ranked: any; lead: Lead; index: number; onClick: () => void }) {
+const RecLeadCard = React.memo(function RecLeadCard({ ranked, lead, index, onClick }: { ranked: any; lead: Lead; index: number; onClick: () => void }) {
   const scores = generateAIScores(lead);
   const stage = (lead._stage as PipelineStage) || 'new';
   return (
@@ -26,7 +26,7 @@ function RecLeadCard({ ranked, lead, index, onClick }: { ranked: any; lead: Lead
       </div>
     </div>
   );
-}
+});
 
 export const RecommendationsPage: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -75,7 +75,7 @@ export const RecommendationsPage: React.FC = () => {
     });
   };
 
-  const activeFilterLeads = () => {
+  const activeFilterLeads = useMemo(() => {
     if (!result) return [];
     if (activeFilters.size === 0) return result.rankedLeads;
     const filterResults = result.smartFilters.filter(f => activeFilters.has(f.filterKey as SmartFilterKey));
@@ -85,7 +85,7 @@ export const RecommendationsPage: React.FC = () => {
       matches = matches.filter(r => filterUrls.has(r.lead.google_maps_url));
     }
     return matches;
-  };
+  }, [result, activeFilters]);
 
   const rankedLeads = result?.rankedLeads || [];
 
@@ -248,8 +248,8 @@ export const RecommendationsPage: React.FC = () => {
                   {activeFilters.size === 0 ? 'No filters active — showing all ranked leads.' : `${activeFilters.size} filter(s) active. Showing intersection.`}
                 </div>
                 <div className="rec-lead-list" style={{ marginTop: '0.75rem' }}>
-                  {activeFilterLeads().slice(0, 25).map(r => <RecLeadCard key={r.lead.google_maps_url} ranked={r} lead={r.lead} index={0} onClick={() => setActiveLead(r.lead)} />)}
-                  {activeFilterLeads().length === 0 && activeFilters.size > 0 && <p className="rec-empty">No leads match all active filters.</p>}
+                  {activeFilterLeads.slice(0, 25).map(r => <RecLeadCard key={r.lead.google_maps_url} ranked={r} lead={r.lead} index={0} onClick={() => setActiveLead(r.lead)} />)}
+                  {activeFilterLeads.length === 0 && activeFilters.size > 0 && <p className="rec-empty">No leads match all active filters.</p>}
                 </div>
               </div>
             )}

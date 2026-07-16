@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Lead, Campaign, CampaignFollowUpStep, CampaignLedgerEntry } from '@/types';
 import { Button, Badge, Spinner, VirtualizedList } from '@/components/ui';
@@ -88,19 +88,19 @@ export const CampaignsPage: React.FC = () => {
     }
   };
 
-  const filteredLeads = leads.filter(l => {
+  const filteredLeads = useMemo(() => leads.filter(l => {
     const q = leadSearch.toLowerCase();
     if (!q) return true;
     return l.business_name.toLowerCase().includes(q) ||
            (l.city || '').toLowerCase().includes(q) ||
            (l.category || '').toLowerCase().includes(q);
-  });
+  }), [leads, leadSearch]);
 
-  const getRecipientLeads = (): string[] => {
+  const getRecipientLeads = useCallback((): string[] => {
     if (formRecipients === 'all') return leads.map(l => l.google_maps_url || '').filter(Boolean);
     if (formRecipients === 'stage') return leads.filter(l => l['_stage'] === formStage).map(l => l.google_maps_url || '').filter(Boolean);
     return Array.from(selectedLeadUrls);
-  };
+  }, [leads, formRecipients, formStage, selectedLeadUrls]);
 
   const handleCreateCampaign = async () => {
     if (!formName.trim()) { setCampaignError('Campaign name is required.'); return; }
@@ -214,7 +214,7 @@ export const CampaignsPage: React.FC = () => {
     return <span className="campaign-badge" style={{ background: (colors[s] || '#666') + '20', color: colors[s] || '#666', border: '1px solid ' + (colors[s] || '#666') }}>{s}</span>;
   };
 
-  const calculateStats = (c: Campaign, entries: CampaignLedgerEntry[]) => {
+  const calculateStats = useCallback((c: Campaign, entries: CampaignLedgerEntry[]) => {
     if (!entries) return c.stats;
     return {
       sentCount: entries.filter(e => e.status === 'sent').length,
@@ -224,7 +224,7 @@ export const CampaignsPage: React.FC = () => {
       followUpsCompleted: entries.filter(e => e.status !== 'pending').length,
       followUpsTotal: c.stats.followUpsTotal,
     };
-  };
+  }, []);
 
   return (
     <motion.div className="page-content" variants={staggerContainer} initial="hidden" animate="visible" exit="hidden">

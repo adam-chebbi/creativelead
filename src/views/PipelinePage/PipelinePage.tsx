@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Lead, PipelineStage, PipelineStageEntry, FollowUp } from '@/types';
 import { useLeadsQuery, useLeadUpdateMutation } from '@/hooks';
@@ -31,13 +31,12 @@ export const PipelinePage: React.FC = () => {
 
   useEffect(() => { reloadFollowUps(); }, []);
 
-  // Group leads by stage
-  const grouped = PIPELINE_STAGES.reduce((acc, s) => {
+  // Group leads by stage — memoized to avoid re-filtering on every render
+  const grouped = useMemo(() => PIPELINE_STAGES.reduce((acc, s) => {
     const stageLeads = leads.filter(l => {
       const stage = (l._stage as PipelineStage) || 'new';
       return stage === s;
     });
-    // Filter by search
     const filtered = search ? stageLeads.filter(l =>
       (l.business_name || '').toLowerCase().includes(search.toLowerCase()) ||
       (l.category || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -45,17 +44,15 @@ export const PipelinePage: React.FC = () => {
     ) : stageLeads;
     acc[s] = filtered;
     return acc;
-  }, {} as Record<PipelineStage, Lead[]>);
+  }, {} as Record<PipelineStage, Lead[]>), [leads, search]);
 
-  // Pipeline total value
-  const pipelineValue = leads.reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0);
+  const pipelineValue = useMemo(() => leads.reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0), [leads]);
 
-  // Follow-ups for the board badge
-  const followUpsByLead = followUps.reduce((acc, f) => {
+  const followUpsByLead = useMemo(() => followUps.reduce((acc, f) => {
     if (!acc[f.leadUrl]) acc[f.leadUrl] = [];
     acc[f.leadUrl].push(f);
     return acc;
-  }, {} as Record<string, FollowUp[]>);
+  }, {} as Record<string, FollowUp[]>), [followUps]);
 
   // Drag-and-drop handlers
   const handleDragStart = (e: React.DragEvent, url: string) => {
@@ -95,16 +92,14 @@ export const PipelinePage: React.FC = () => {
     setActiveLead(null);
   };
 
-  const overdue = followUps.filter(f => !f.completed && new Date(f.dueAt).getTime() < Date.now()).sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
-  const upcoming = followUps.filter(f => !f.completed && new Date(f.dueAt).getTime() >= Date.now() && new Date(f.dueAt).getTime() <= new Date(Date.now() + 7 * 86400000).getTime()).sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+  const now = useMemo(() => Date.now(), []);
+  const overdue = useMemo(() => followUps.filter(f => !f.completed && new Date(f.dueAt).getTime() < now).sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime()), [followUps, now]);
+  const upcoming = useMemo(() => followUps.filter(f => !f.completed && new Date(f.dueAt).getTime() >= now && new Date(f.dueAt).getTime() <= new Date(now + 7 * 86400000).getTime()).sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime()), [followUps, now]);
   const overdueCount = overdue.length;
   const upcomingCount = upcoming.length;
 
-  // Stats for non-terminal columns
-  const nonTerminalStages: PipelineStage[] = ['new', 'contacted', 'qualified', 'proposal', 'negotiation'];
-  const activeLeadsCount = nonTerminalStages.reduce((sum, s) => sum + grouped[s].length, 0);
-
-  // Won/Lost data for reports
+  const nonTerminalStages: PipelineStage[] = useMemo(() => ['new', 'contacted', 'qualified', 'proposal', 'negotiation'], []);
+  const activeLeadsCount = useMemo(() => nonTerminalStages.reduce((sum, s) => sum + grouped[s].length, 0), [nonTerminalStages, grouped]);
   const wonLeads = grouped['won'];
   const lostLeads = grouped['lost'];
 
