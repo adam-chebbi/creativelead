@@ -38,6 +38,9 @@ export const RecommendationsPage: React.FC = () => {
   const [selectedLeadUrl, setSelectedLeadUrl] = useState<string>('');
   const [activeFilters, setActiveFilters] = useState<Set<SmartFilterKey>>(new Set());
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
+  const [page, setPage] = useState(1);
+  const [filterPage, setFilterPage] = useState(1);
+  const PAGE_SIZE = 25;
 
   const { getAllLeads, updateLead } = useLeadStore();
 
@@ -69,6 +72,7 @@ export const RecommendationsPage: React.FC = () => {
   };
 
   const toggleFilter = (key: SmartFilterKey) => {
+    setFilterPage(1);
     setActiveFilters(prev => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
@@ -139,7 +143,7 @@ export const RecommendationsPage: React.FC = () => {
         ) : (
           <>
             <div className="modal-tabs" style={{ marginBottom: '1.5rem' }}>
-              <button className={`modal-tab ${activeTab === 'ranked' ? 'active' : ''}`} onClick={() => setActiveTab('ranked')}>Top Ranked ({rankedLeads.slice(0, 10).length})</button>
+              <button className={`modal-tab ${activeTab === 'ranked' ? 'active' : ''}`} onClick={() => { setActiveTab('ranked'); setPage(1); }}>Top Ranked ({rankedLeads.length})</button>
               <button className={`modal-tab ${activeTab === 'conversion' ? 'active' : ''}`} onClick={() => setActiveTab('conversion')}>High Conversion ({result.highConversionLeads.length})</button>
               <button className={`modal-tab ${activeTab === 'similar' ? 'active' : ''}`} onClick={() => setActiveTab('similar')}>Similar {Array.isArray(result.similarCompanies) ? `(${result.similarCompanies.length})` : ''}</button>
               <button className={`modal-tab ${activeTab === 'nearby' ? 'active' : ''}`} onClick={() => setActiveTab('nearby')}>Nearby</button>
@@ -152,7 +156,17 @@ export const RecommendationsPage: React.FC = () => {
                 <h3 className="rec-section-title">Top Recommended Leads</h3>
                 <p className="rec-section-subtitle">Weighted rank: AI Score (45%) + conversion probability (20%) + deal value (15%) + recency (10%) + gaps (10%). Won/Lost leads deprioritized.</p>
                 <div className="rec-lead-list">
-                  {rankedLeads.slice(0, 10).map((r, i) => <RecLeadCard key={r.lead.google_maps_url} ranked={r} lead={r.lead} index={i} onClick={() => setActiveLead(r.lead)} />)}
+                  {(() => {
+                    const start = (page - 1) * PAGE_SIZE;
+                    return rankedLeads.slice(start, start + PAGE_SIZE).map((r, i) => (
+                      <RecLeadCard key={r.lead.google_maps_url} ranked={r} lead={r.lead} index={start + i} onClick={() => setActiveLead(r.lead)} />
+                    ));
+                  })()}
+                </div>
+                <div className="pagination-controls">
+                  <button className="btn btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
+                  <span className="pagination-info">Page {page} of {Math.max(1, Math.ceil(rankedLeads.length / PAGE_SIZE))} ({rankedLeads.length} total)</span>
+                  <button className="btn btn-sm" disabled={page * PAGE_SIZE >= rankedLeads.length} onClick={() => setPage(p => p + 1)}>Next →</button>
                 </div>
               </div>
             )}
@@ -249,9 +263,19 @@ export const RecommendationsPage: React.FC = () => {
                   {activeFilters.size === 0 ? 'No filters active — showing all ranked leads.' : `${activeFilters.size} filter(s) active. Showing intersection.`}
                 </div>
                 <div className="rec-lead-list" style={{ marginTop: '0.75rem' }}>
-                  {activeFilterLeads.slice(0, 25).map(r => <RecLeadCard key={r.lead.google_maps_url} ranked={r} lead={r.lead} index={0} onClick={() => setActiveLead(r.lead)} />)}
+                  {(() => {
+                    const start = (filterPage - 1) * PAGE_SIZE;
+                    return activeFilterLeads.slice(start, start + PAGE_SIZE).map(r => <RecLeadCard key={r.lead.google_maps_url} ranked={r} lead={r.lead} index={start} onClick={() => setActiveLead(r.lead)} />);
+                  })()}
                   {activeFilterLeads.length === 0 && activeFilters.size > 0 && <p className="rec-empty">No leads match all active filters.</p>}
                 </div>
+                {activeFilterLeads.length > PAGE_SIZE && (
+                  <div className="pagination-controls" style={{ marginTop: '0.75rem' }}>
+                    <button className="btn btn-sm" disabled={filterPage <= 1} onClick={() => setFilterPage(p => p - 1)}>← Prev</button>
+                    <span className="pagination-info">Page {filterPage} of {Math.max(1, Math.ceil(activeFilterLeads.length / PAGE_SIZE))} ({activeFilterLeads.length} total)</span>
+                    <button className="btn btn-sm" disabled={filterPage * PAGE_SIZE >= activeFilterLeads.length} onClick={() => setFilterPage(p => p + 1)}>Next →</button>
+                  </div>
+                )}
               </div>
             )}
           </>
