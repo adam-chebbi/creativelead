@@ -6,4 +6,5 @@ export * from './Spinner';
 export * from './StatItem';
 export * from './PipelineStageBadge';
 export * from './RatingStars';
+export * from './VirtualizedList';
 export { PIPELINE_STAGES, STAGE_LABELS, PipelineStageBadge } from './PipelineStageBadge';

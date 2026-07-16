@@ -1,7 +1,7 @@
 import React from "react";
 import "@/index.css";
 import "@/styles.css";
-import { QueryProvider } from "@/hooks";
+import { QueryProvider } from "@/hooks/query-provider";
 
 export const metadata = {
   title: "CreativeLead",

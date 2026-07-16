@@ -9,7 +9,7 @@ export function generateAIScores(lead: Partial<Lead>): Partial<Lead> {
   const reviewCount = lead.review_count;
   const hasWebsite = !!lead.website;
 
-  let review_reputation: number | null = null;
+  let review_reputation: number | null | undefined = null;
   if (rating === null || rating === undefined || rating <= 0) {
     review_reputation = null;
   } else {
@@ -21,7 +21,7 @@ export function generateAIScores(lead: Partial<Lead>): Partial<Lead> {
     review_reputation = Math.round(rr);
   }
 
-  let website_quality: number | null = null;
+  let website_quality: number | null | undefined = null;
   if (lead.website_intelligence && lead.website_intelligence.reachable) {
     const wi = lead.website_intelligence;
     let wq = 0;
@@ -93,9 +93,11 @@ export function generateAIScores(lead: Partial<Lead>): Partial<Lead> {
   if (ai_score >= 75) classification = 'Hot';
   else if (ai_score >= 40) classification = 'Warm';
 
+  const nil = (v: number | null | undefined) => v ?? undefined;
+
   return {
     ai_score, classification, opportunity_score, competition_score,
-    growth_score, seo_weakness, website_quality, review_reputation,
+    growth_score: nil(growth_score), seo_weakness: nil(seo_weakness), website_quality: nil(website_quality), review_reputation: nil(review_reputation),
     _insufficientData: buildInsufficientDataFlags(rating, reviewCount, lead.website_intelligence),
   };
 }

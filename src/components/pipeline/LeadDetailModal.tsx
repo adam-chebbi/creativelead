@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lead, OutreachMessages, PipelineStage, PipelineStageEntry, LeadNote, LeadAttachment, FollowUp } from '@/types';
+import { Lead, OutreachMessages, PipelineStage, PipelineStageEntry, LeadNote, LeadAttachment, FollowUp, OpportunityGap, DealValueBreakdown, ConversionFactor } from '@/types';
 import { Button, PIPELINE_STAGES, STAGE_LABELS, PipelineStageBadge } from '@/components/ui';
 import { GapIndicator } from './GapIndicator';
 import { ValueBreakdown } from './ValueBreakdown';

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { scoreLeadById } from './score-lead-server';
 
 interface PricingConfig {
@@ -540,27 +541,29 @@ export async function analyzeOpportunity(
   if (detectedCount >= 3) confidence = 'high';
   else if (detectedCount <= 1) confidence = 'low';
 
+  const toJson = (v: unknown) => v as unknown as Prisma.InputJsonValue;
+
   await prisma.leadOpportunity.upsert({
     where: { leadId },
     create: {
       leadId,
-      detectedGaps: gaps,
+      detectedGaps: toJson(gaps),
       recommendedService: recommendation.service,
       recommendedServiceDetails: recommendation.details,
       estimatedDealValue: value,
-      dealValueBreakdown: breakdown,
+      dealValueBreakdown: toJson(breakdown),
       conversionProbability: probability / 100,
-      conversionFactors: factors,
+      conversionFactors: toJson(factors),
       confidenceLevel: confidence,
     },
     update: {
-      detectedGaps: gaps,
+      detectedGaps: toJson(gaps),
       recommendedService: recommendation.service,
       recommendedServiceDetails: recommendation.details,
       estimatedDealValue: value,
-      dealValueBreakdown: breakdown,
+      dealValueBreakdown: toJson(breakdown),
       conversionProbability: probability / 100,
-      conversionFactors: factors,
+      conversionFactors: toJson(factors),
       confidenceLevel: confidence,
     },
   });

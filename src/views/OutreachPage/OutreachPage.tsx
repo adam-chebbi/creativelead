@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Lead, OutreachMessages, OutreachMessage } from '@/types';
-import { Button, Badge, Card, Spinner } from '@/components/ui';
+import { Button, Badge, Card, Spinner, VirtualizedList } from '@/components/ui';
 import { useLeadStore } from '@/hooks';
 import { OUTREACH_CHANNELS, ChannelSpec } from '@/utils/outreach-generator';
 import { apiRequest } from '@/utils/api-request';
@@ -241,21 +241,30 @@ export const OutreachPage: React.FC = () => {
             style={{ marginBottom: '1rem' }}
           />
           <div className="outreach-lead-list">
-            {filteredLeads.map(lead => (
-              <div
-                key={lead.google_maps_url || lead.business_name}
-                className={`outreach-lead-item ${selectedLead?.google_maps_url === lead.google_maps_url ? 'active' : ''}`}
-                onClick={() => selectLead(lead)}
-              >
-                <strong>{lead.business_name}</strong>
-                <span className="outreach-lead-meta">
-                  {lead.city || lead.location || ''}{lead.category ? ` · ${lead.category}` : ''}
-                </span>
-                {lead.outreach_messages && <span className="outreach-lead-check">✓ Generated</span>}
-              </div>
-            ))}
-            {filteredLeads.length === 0 && (
+            {filteredLeads.length === 0 ? (
               <p className="outreach-empty">No leads found. Import leads first.</p>
+            ) : (
+              <VirtualizedList
+                items={filteredLeads}
+                height={500}
+                rowHeight={56}
+                renderItem={(index, style) => {
+                  const lead = filteredLeads[index];
+                  return (
+                    <div
+                      style={style}
+                      className={`outreach-lead-item ${selectedLead?.google_maps_url === lead.google_maps_url ? 'active' : ''}`}
+                      onClick={() => selectLead(lead)}
+                    >
+                      <strong>{lead.business_name}</strong>
+                      <span className="outreach-lead-meta">
+                        {lead.city || lead.location || ''}{lead.category ? ` · ${lead.category}` : ''}
+                      </span>
+                      {lead.outreach_messages && <span className="outreach-lead-check">✓ Generated</span>}
+                    </div>
+                  );
+                }}
+              />
             )}
           </div>
         </motion.div>

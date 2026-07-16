@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Lead, Campaign, CampaignFollowUpStep, CampaignLedgerEntry } from '@/types';
-import { Button, Badge, Spinner } from '@/components/ui';
+import { Button, Badge, Spinner, VirtualizedList } from '@/components/ui';
 
 import { useLeadStore } from '@/hooks';
 import { getAllCampaigns, saveCampaign, getCampaignLedger, generateId, deleteCampaign } from '@/utils/campaign-db';
@@ -463,37 +463,39 @@ export const CampaignsPage: React.FC = () => {
 
             <div className="campaign-ledger-table-wrapper">
               <h3 style={{ marginBottom: '0.75rem' }}>Send Log</h3>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Lead</th>
-                    <th>Step</th>
-                    <th>Status</th>
-                    <th>Sent At</th>
-                    <th>Error</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(ledgers[detailCampaign.id] || []).map(e => {
+              <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', fontWeight: 600, fontSize: '0.8rem', padding: '0.5rem 0.75rem' }}>
+                  <div style={{ flex: 2 }}>Lead</div>
+                  <div style={{ flex: 0.5 }}>Step</div>
+                  <div style={{ flex: 1 }}>Status</div>
+                  <div style={{ flex: 1.5 }}>Sent At</div>
+                  <div style={{ flex: 2 }}>Error</div>
+                  <div style={{ flex: 1 }}>Action</div>
+                </div>
+                <VirtualizedList
+                  items={ledgers[detailCampaign.id] || []}
+                  height={400}
+                  rowHeight={42}
+                  renderItem={(index, style) => {
+                    const e = (ledgers[detailCampaign.id] || [])[index];
                     const lead = leads.find(l => l.google_maps_url === e.leadUrl);
                     return (
-                      <tr key={e.id}>
-                        <td className="td-name">{lead?.business_name || e.leadUrl.slice(0, 20)}</td>
-                        <td>{e.stepIndex + 1}</td>
-                        <td>{statusBadge(e.status)}</td>
-                        <td style={{ fontSize: '0.75rem' }}>{e.sentAt ? new Date(e.sentAt).toLocaleString() : '-'}</td>
-                        <td style={{ fontSize: '0.75rem', color: 'var(--color-danger)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.errorMessage || '-'}</td>
-                        <td>
+                      <div style={{ ...style, display: 'flex', alignItems: 'center', padding: '0 0.75rem', fontSize: '0.8rem', borderBottom: '1px solid var(--color-border)' }}>
+                        <div className="td-name" style={{ flex: 2 }}>{lead?.business_name || e.leadUrl.slice(0, 20)}</div>
+                        <div style={{ flex: 0.5 }}>{e.stepIndex + 1}</div>
+                        <div style={{ flex: 1 }}>{statusBadge(e.status)}</div>
+                        <div style={{ flex: 1.5, fontSize: '0.75rem' }}>{e.sentAt ? new Date(e.sentAt).toLocaleString() : '-'}</div>
+                        <div style={{ flex: 2, fontSize: '0.75rem', color: 'var(--color-danger)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.errorMessage || '-'}</div>
+                        <div style={{ flex: 1 }}>
                           {e.status === 'sent' && (
                             <Button size="sm" variant="ghost" onClick={() => handleMarkReplied(e.id, detailCampaign.id)}>Mark Replied</Button>
                           )}
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     );
-                  })}
-                </tbody>
-              </table>
+                  }}
+                />
+              </div>
             </div>
 
             <div style={{ marginTop: '1.5rem' }}>

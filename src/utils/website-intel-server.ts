@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { scoreLeadById } from './score-lead-server';
 import { analyzeOpportunity } from './opportunity-server';
 
@@ -577,6 +578,8 @@ export async function analyzeWebsiteServer(
     result = analyzeHtml(fetched.html, fetched.headers, lead.website, fetched.loadTimeMs);
   }
 
+  const toJson = (v: unknown) => v as unknown as Prisma.InputJsonValue;
+
   await prisma.leadWebsiteIntelligence.upsert({
     where: { leadId },
     create: {
@@ -591,7 +594,7 @@ export async function analyzeWebsiteServer(
       analyticsTools: result.analyticsFound,
       hasChatbot: result.hasChatbot,
       chatbotTools: result.chatbotFound,
-      detectedTechnologies: result.technologies,
+      detectedTechnologies: toJson(result.technologies),
       hasTitle: result.seo.hasTitle,
       hasMetaDescription: result.seo.hasMetaDescription,
       hasStructuredData: result.seo.hasStructuredData,
@@ -610,7 +613,7 @@ export async function analyzeWebsiteServer(
       analyticsTools: result.analyticsFound,
       hasChatbot: result.hasChatbot,
       chatbotTools: result.chatbotFound,
-      detectedTechnologies: result.technologies,
+      detectedTechnologies: toJson(result.technologies),
       hasTitle: result.seo.hasTitle,
       hasMetaDescription: result.seo.hasMetaDescription,
       hasStructuredData: result.seo.hasStructuredData,
