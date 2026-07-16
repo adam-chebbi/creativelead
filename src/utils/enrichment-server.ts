@@ -422,7 +422,10 @@ export async function enrichLead(
     let scrapeDesc = '';
 
     const hasWebsite = !!lead.website && isValidUrl(lead.website);
-    const hasApiKey = enrichmentApiConfig && enrichmentApiConfig.apiKey && enrichmentApiConfig.provider !== 'none';
+    const resolvedApiKey = enrichmentApiConfig?.apiKey || process.env.ENRICHMENT_API_KEY || '';
+    const resolvedProvider = enrichmentApiConfig?.provider || (process.env.ENRICHMENT_PROVIDER as any) || 'none';
+    const hasApiKey = !!(resolvedApiKey && resolvedProvider !== 'none');
+    const effectiveConfig = enrichmentApiConfig || (resolvedApiKey ? { provider: resolvedProvider, apiKey: resolvedApiKey } : undefined);
 
     if (!hasWebsite && !hasApiKey) {
       await saveEnrichmentResult(leadId, {
@@ -490,36 +493,36 @@ export async function enrichLead(
     if (hasApiKey && hasWebsite && lead.website) {
       const domain = extractDomain(lead.website);
       if (domain) {
-        const apiResult = await callEnrichmentApi(domain, lead.businessName || '', enrichmentApiConfig!);
+        const apiResult = await callEnrichmentApi(domain, lead.businessName || '', effectiveConfig!);
         for (const e of apiResult.emails) {
           if (!foundEmails.includes(e.email)) {
             foundEmails.push(e.email);
             evidence.emails.push({
               type: 'enrichment_api',
-              label: `${enrichmentApiConfig!.provider}.io: ${e.source || 'direct lookup'}`,
+              label: `${effectiveConfig!.provider}.io: ${e.source || 'direct lookup'}`,
               confidence: e.confidence,
             });
           }
         }
         if (apiResult.linkedin && !linkedin) {
           linkedin = apiResult.linkedin;
-          evidence.linkedin.push({ type: 'enrichment_api', label: `${enrichmentApiConfig!.provider}.io API response`, confidence: 'medium' });
+          evidence.linkedin.push({ type: 'enrichment_api', label: `${effectiveConfig!.provider}.io API response`, confidence: 'medium' });
         }
         if (apiResult.facebook && !facebook) {
           facebook = apiResult.facebook;
-          evidence.facebook.push({ type: 'enrichment_api', label: `${enrichmentApiConfig!.provider}.io API response`, confidence: 'medium' });
+          evidence.facebook.push({ type: 'enrichment_api', label: `${effectiveConfig!.provider}.io API response`, confidence: 'medium' });
         }
         if (apiResult.instagram && !instagram) {
           instagram = apiResult.instagram;
-          evidence.instagram.push({ type: 'enrichment_api', label: `${enrichmentApiConfig!.provider}.io API response`, confidence: 'medium' });
+          evidence.instagram.push({ type: 'enrichment_api', label: `${effectiveConfig!.provider}.io API response`, confidence: 'medium' });
         }
         if (apiResult.tiktok && !tiktok) {
           tiktok = apiResult.tiktok;
-          evidence.tiktok.push({ type: 'enrichment_api', label: `${enrichmentApiConfig!.provider}.io API response`, confidence: 'medium' });
+          evidence.tiktok.push({ type: 'enrichment_api', label: `${effectiveConfig!.provider}.io API response`, confidence: 'medium' });
         }
         if (apiResult.youtube && !youtube) {
           youtube = apiResult.youtube;
-          evidence.youtube.push({ type: 'enrichment_api', label: `${enrichmentApiConfig!.provider}.io API response`, confidence: 'medium' });
+          evidence.youtube.push({ type: 'enrichment_api', label: `${effectiveConfig!.provider}.io API response`, confidence: 'medium' });
         }
       }
     }
