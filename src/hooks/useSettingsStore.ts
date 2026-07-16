@@ -163,10 +163,11 @@ export function saveSettings(settings: AppSettings) {
 }
 
 export function useSettingsStore() {
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AppSettings>(
+    typeof window !== 'undefined' ? getSettings() : DEFAULT_SETTINGS
+  );
 
   useEffect(() => {
-    setSettings(getSettings());
     const handleUpdate = () => setSettings(getSettings());
     window.addEventListener('settingsUpdated', handleUpdate);
     return () => window.removeEventListener('settingsUpdated', handleUpdate);
