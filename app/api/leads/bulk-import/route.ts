@@ -88,20 +88,28 @@ export async function POST(req: Request) {
       .map((r) => r.value);
 
     (async () => {
-      for (const lead of fulfilledLeads) {
-        try {
-          await scoreLeadById(lead.id, orgId);
-        } catch (err) {
-          console.error(`[BULK_IMPORT] scoring failed for lead ${lead.id}:`, err);
-        }
-        if (lead.website) {
-          queueWebsiteIntel(lead.id, orgId).catch((err) =>
-            console.error(`[BULK_IMPORT] website intel failed for ${lead.id}:`, err)
-          );
-          queueEnrichment(lead.id, orgId).catch((err) =>
-            console.error(`[BULK_IMPORT] enrichment failed for ${lead.id}:`, err)
-          );
-        }
+      const BG_CONCURRENCY = 5;
+      for (let i = 0; i < fulfilledLeads.length; i += BG_CONCURRENCY) {
+        const batch = fulfilledLeads.slice(i, i + BG_CONCURRENCY);
+        await Promise.allSettled(
+          batch.map(async (lead) => {
+            try {
+              await scoreLeadById(lead.id, orgId);
+            } catch (err) {
+              console.error(`[BULK_IMPORT] scoring failed for lead ${lead.id}:`, err);
+            }
+            if (lead.website) {
+              await Promise.all([
+                queueWebsiteIntel(lead.id, orgId).catch((err) =>
+                  console.error(`[BULK_IMPORT] website intel failed for ${lead.id}:`, err)
+                ),
+                queueEnrichment(lead.id, orgId).catch((err) =>
+                  console.error(`[BULK_IMPORT] enrichment failed for ${lead.id}:`, err)
+                ),
+              ]);
+            }
+          })
+        );
       }
     })();
 

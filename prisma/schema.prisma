@@ -162,6 +162,8 @@ model LeadNote {
   authorId  String
   body      String
   createdAt DateTime @default(now())
+
+  @@index([leadId])
 }
 
 model FollowUp {
@@ -171,6 +173,9 @@ model FollowUp {
   dueAt        DateTime
   assignedToId String
   status       String   @default("pending")
+
+  @@index([leadId])
+  @@index([status])
 }
 
 model LeadAttachment {
@@ -179,6 +184,8 @@ model LeadAttachment {
   lead         Lead     @relation(fields:[leadId], references:[id])
   fileUrl      String
   uploadedById String
+
+  @@index([leadId])
 }
 
 model PipelineStageEntry {
@@ -199,6 +206,8 @@ model Campaign {
   status         String       @default("draft")
   createdById    String
   createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
 }
 
 model AuditLog {

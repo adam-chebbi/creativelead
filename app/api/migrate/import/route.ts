@@ -41,42 +41,51 @@ export async function POST(req: Request) {
     const body = await req.json();
     const leads = batchSchema.parse(body);
 
-    let importedCount = 0;
+    const CONCURRENCY = 10;
+    const results: boolean[] = [];
 
-    for (const lead of leads) {
-      const businessName = lead.businessName ?? lead.business_name ?? 'Unknown';
-      const phone = lead.phone ?? lead.phone_number ?? null;
-
-      try {
-        await prisma.lead.upsert({
-          where: {
-            organizationId_phone: {
-              organizationId: caller.orgId,
-              phone: phone ?? '__no_phone__',
-            },
-          },
-          update: {},
-          create: {
-            organizationId: caller.orgId,
-            createdById: caller.userId,
-            businessName,
-            category: lead.category,
-            address: lead.address,
-            city: lead.city,
-            phone: phone,
-            website: lead.website,
-            email: lead.email,
-            rating: lead.rating,
-            reviewCount: lead.reviewCount ?? lead.review_count,
-            aiScore: lead.aiScore,
-            classification: lead.classification,
-            pipelineStage: lead.pipelineStage ?? 'new',
-          },
-        });
-        importedCount++;
-      } catch {
-      }
+    for (let i = 0; i < leads.length; i += CONCURRENCY) {
+      const batch = leads.slice(i, i + CONCURRENCY);
+      const batchResults = await Promise.allSettled(
+        batch.map(async (lead) => {
+          const businessName = lead.businessName ?? lead.business_name ?? 'Unknown';
+          const phone = lead.phone ?? lead.phone_number ?? null;
+          try {
+            await prisma.lead.upsert({
+              where: {
+                organizationId_phone: {
+                  organizationId: caller.orgId,
+                  phone: phone ?? '__no_phone__',
+                },
+              },
+              update: {},
+              create: {
+                organizationId: caller.orgId,
+                createdById: caller.userId,
+                businessName,
+                category: lead.category,
+                address: lead.address,
+                city: lead.city,
+                phone: phone,
+                website: lead.website,
+                email: lead.email,
+                rating: lead.rating,
+                reviewCount: lead.reviewCount ?? lead.review_count,
+                aiScore: lead.aiScore,
+                classification: lead.classification,
+                pipelineStage: lead.pipelineStage ?? 'new',
+              },
+            });
+            return true;
+          } catch {
+            return false;
+          }
+        })
+      );
+      results.push(...batchResults.map((r) => r.status === 'fulfilled' && r.value));
     }
+
+    const importedCount = results.filter(Boolean).length;
 
     await prisma.auditLog.create({
       data: {
