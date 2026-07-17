@@ -14,7 +14,8 @@ export type SecretKey =
   | `org/${string}/ai/openai`
   | `org/${string}/ai/gemini`
   | `org/${string}/smtp`
-  | `org/${string}/twilio`;
+  | `org/${string}/twilio`
+  | `org/${string}/google-sheets`;
 
 /**
  * Retrieve a secret value by key.

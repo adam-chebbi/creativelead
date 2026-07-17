@@ -5,7 +5,7 @@ import { hasSecret, maskSecret, getSecret, setSecret, SecretKey } from '@/lib/se
 import { requireRole } from '@/lib/requireRole';
 import { z } from 'zod';
 
-const INTEGRATION_KEYS = ['ai/openai', 'ai/gemini', 'smtp', 'twilio'] as const;
+const INTEGRATION_KEYS = ['ai/openai', 'ai/gemini', 'smtp', 'twilio', 'google-sheets'] as const;
 type IntegrationSlug = typeof INTEGRATION_KEYS[number];
 
 export async function GET(req: Request) {
@@ -36,8 +36,10 @@ export async function GET(req: Request) {
   }
 }
 
+const INTEGRATION_SLUGS = ['ai/openai', 'ai/gemini', 'smtp', 'twilio', 'google-sheets'] as const;
+
 const integrationUpdateSchema = z.object({
-  slug: z.enum(['ai/openai', 'ai/gemini', 'smtp', 'twilio']),
+  slug: z.enum(INTEGRATION_SLUGS),
   value: z.string().min(1, 'Secret value cannot be empty'),
 }).strict();
 

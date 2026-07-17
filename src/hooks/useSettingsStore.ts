@@ -61,6 +61,7 @@ export interface AppSettings {
   customModel: string;
   enrichmentKey: string;
   enrichmentProvider: 'hunter' | 'clearbit' | 'apollo' | 'none';
+  googleSheetsUrl: string;
   weights: ScoringWeights;
   opportunityConfig: OpportunityConfig;
   providers: ProviderCredentials;
@@ -99,6 +100,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   customModel: '',
   enrichmentKey: '',
   enrichmentProvider: 'none',
+  googleSheetsUrl: '',
   weights: {
     opportunity: 20,
     competition: 20,

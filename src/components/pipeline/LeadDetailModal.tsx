@@ -93,6 +93,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({ lead, onClose,
   const [editOutreachText, setEditOutreachText] = useState('');
   const [regeneratingKey, setRegeneratingKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [sheetsSyncing, setSheetsSyncing] = useState(false);
 
   // ---- Tab: Stage History ----
   const [stageHistory, setStageHistory] = useState<PipelineStageEntry[]>([]);
@@ -231,6 +232,30 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({ lead, onClose,
     else if (provider === 'custom') { apiKey = s.customApiKey; model = s.customModel; apiBase = s.customApiBase; }
     return { provider, model, apiKey, apiBase };
   }
+
+  const handleSyncLeadToSheets = async () => {
+    const s = getSettings();
+    if (!s.googleSheetsUrl) {
+      setOutreachError('Google Sheets URL not configured. Go to Settings.');
+      return;
+    }
+    setSheetsSyncing(true);
+    try {
+      const serverId = lead._serverId || lead.google_maps_url?.replace('server:', '');
+      const res = await apiRequest(`/api/leads/sync-sheets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: serverId, sheetUrl: s.googleSheetsUrl }),
+      });
+      const json = await res.json();
+      if (json.ok) setOutreachError(null);
+      else setOutreachError(json.error || 'Sync failed');
+    } catch {
+      setOutreachError('Sync request failed');
+    } finally {
+      setSheetsSyncing(false);
+    }
+  };
 
   const handleGenerateOutreach = async () => {
     setLoadingOutreach(true);
@@ -571,7 +596,10 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({ lead, onClose,
                     ) : <div className="opportunity-empty"><p>Generate personalized outreach messages.</p></div>}
                     {loadingOutreach && <div className="opportunity-loading"><span className="spinner" style={{ display: 'inline-block', marginRight: '0.5rem' }} />Generating messages...</div>}
                   </div>
-                  <Button size="sm" variant="primary" onClick={handleGenerateOutreach} disabled={loadingOutreach}>{loadingOutreach ? 'Generating...' : outreachMsgs ? 'Regenerate All' : 'Generate Outreach'}</Button>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <Button size="sm" variant="primary" onClick={handleGenerateOutreach} disabled={loadingOutreach}>{loadingOutreach ? 'Generating...' : outreachMsgs ? 'Regenerate All' : 'Generate Outreach'}</Button>
+                    <Button size="sm" variant="secondary" onClick={handleSyncLeadToSheets} disabled={sheetsSyncing}>{sheetsSyncing ? 'Syncing...' : 'Sync to Sheets'}</Button>
+                  </div>
                 </div>
 
                 <div className="lead-col">

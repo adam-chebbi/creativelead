@@ -26,6 +26,10 @@ export const SettingsPage: React.FC = () => {
 
   const [enrichmentKey, setEnrichmentKey] = useState(settings.enrichmentKey);
   const [enrichmentProvider, setEnrichmentProvider] = useState(settings.enrichmentProvider);
+  const [googleSheetsUrl, setGoogleSheetsUrl] = useState(settings.googleSheetsUrl || '');
+  const [sheetsTesting, setSheetsTesting] = useState(false);
+  const [sheetsSyncing, setSheetsSyncing] = useState(false);
+  const [sheetsResult, setSheetsResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [weights, setWeights] = useState<ScoringWeights>(settings.weights);
   const [pricing, setPricing] = useState<ServicePricing>(settings.opportunityConfig.pricing);
   const [thresholds, setThresholds] = useState<DetectionThresholds>(settings.opportunityConfig.thresholds);
@@ -59,6 +63,51 @@ export const SettingsPage: React.FC = () => {
     setIsSaved(false);
   };
 
+  const handleTestSheetsConnection = async () => {
+    if (!googleSheetsUrl) {
+      setSheetsResult({ ok: false, message: 'Enter a Web App URL first.' });
+      return;
+    }
+    setSheetsTesting(true);
+    setSheetsResult(null);
+    try {
+      const res = await fetch(googleSheetsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ test: true }),
+      });
+      if (res.ok) setSheetsResult({ ok: true, message: '✓ Connection successful — Web App is reachable.' });
+      else setSheetsResult({ ok: false, message: `× Server returned ${res.status}. Check your URL and script deployment.` });
+    } catch (err) {
+      setSheetsResult({ ok: false, message: '× Could not reach the URL. Check the URL or network/firewall settings.' });
+    } finally {
+      setSheetsTesting(false);
+    }
+  };
+
+  const handleSyncAllToSheets = async () => {
+    if (!googleSheetsUrl) {
+      setSheetsResult({ ok: false, message: 'Enter a Web App URL first.' });
+      return;
+    }
+    setSheetsSyncing(true);
+    setSheetsResult(null);
+    try {
+      const res = await fetch('/api/leads/sync-sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (json.ok) setSheetsResult({ ok: true, message: `✓ Synced ${json.synced} lead(s) to Google Sheets.` });
+      else setSheetsResult({ ok: false, message: `× ${json.error || 'Sync failed.'}` });
+    } catch (err) {
+      setSheetsResult({ ok: false, message: '× Sync request failed. Check console for details.' });
+    } finally {
+      setSheetsSyncing(false);
+    }
+  };
+
   const handleSave = () => {
     updateSettings({
       aiProvider,
@@ -75,6 +124,7 @@ export const SettingsPage: React.FC = () => {
       customModel,
       enrichmentKey,
       enrichmentProvider,
+      googleSheetsUrl,
       weights,
       opportunityConfig: { pricing, thresholds },
       providers,
@@ -407,6 +457,39 @@ export const SettingsPage: React.FC = () => {
                 <input type="text" className="input" placeholder="+15559876543" value={providers.twilioWhatsAppFromNumber} onChange={handleProviderField('twilioWhatsAppFromNumber')} />
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Google Sheets Integration */}
+        <div className="card card-glow" style={{ padding: '2rem' }}>
+          <h2 className="section-title">Google Sheets Integration</h2>
+          <p className="section-subtitle" style={{ marginBottom: '1.5rem' }}>
+            Sync your leads to a Google Sheet via an Apps Script Web App. First deploy the script (instructions in the app), then paste the Web App URL below.
+          </p>
+
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Apps Script Web App URL</label>
+            <input
+              type="url"
+              className="input"
+              placeholder="https://script.google.com/macros/s/.../exec"
+              value={googleSheetsUrl}
+              onChange={(e) => { setGoogleSheetsUrl(e.target.value); setIsSaved(false); }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginTop: '1.25rem', flexWrap: 'wrap' }}>
+            <Button size="sm" variant="secondary" onClick={handleTestSheetsConnection} disabled={sheetsTesting}>
+              {sheetsTesting ? 'Testing...' : 'Test Connection'}
+            </Button>
+            <Button size="sm" variant="primary" onClick={handleSyncAllToSheets} disabled={sheetsSyncing}>
+              {sheetsSyncing ? 'Syncing...' : 'Sync All Leads Now'}
+            </Button>
+            {sheetsResult && (
+              <span style={{ fontSize: '0.8rem', color: sheetsResult.ok ? 'var(--color-success)' : 'var(--color-danger)', flex: 1, minWidth: 0, marginTop: '0.25rem' }}>
+                {sheetsResult.message}
+              </span>
+            )}
           </div>
         </div>
 
