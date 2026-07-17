@@ -51,7 +51,7 @@ function buildSystemPrompt(): string {
 }
 
 export interface ChannelSpec {
-  key: 'email' | 'linkedin' | 'whatsapp' | 'proposalIntro';
+  key: 'email' | 'linkedin' | 'whatsapp' | 'proposalIntro' | 'phoneScript';
   label: string;
   instruction: string;
   requiresSubject: boolean;
@@ -62,6 +62,12 @@ export const OUTREACH_CHANNELS: ChannelSpec[] = [
   { key: 'linkedin', label: 'LinkedIn Message', instruction: 'Write a short LinkedIn message (max 300 characters). Conversational tone. No subject line. Reference one specific observation. End with a soft call to action.', requiresSubject: false },
   { key: 'whatsapp', label: 'WhatsApp Message', instruction: 'Write a very short WhatsApp message (max 200 characters). Informal, friendly tone. Extremely concise — like texting a business owner. No subject line.', requiresSubject: false },
   { key: 'proposalIntro', label: 'Proposal Introduction', instruction: 'Write a professional proposal introduction paragraph (3-4 sentences). This is the opening section of a formal proposal document. Reference the recommended service. Tone: confident, respectful, solution-oriented. No subject line.', requiresSubject: false },
+  {
+    key: 'phoneScript',
+    label: 'Phone Call Script',
+    instruction: 'Write a structured outbound cold-call script with these clearly labeled sections:\n- Opening / Introduction (10-15 seconds, states who you are and why you are calling)\n- Permission-based hook referencing one specific detected gap or positive signal about the business (use only real data provided, never fabricate)\n- 2-3 short discovery questions to qualify the prospect and uncover pain points\n- Brief value proposition tied to the recommended service\n- Objection-handling notes for the 2 most likely objections with a one-line response to each\n- Clear call to action / next step\nTone: confident, conversational, respectful of the business owner\'s time — written the way a real person would speak on the phone, not like an email.',
+    requiresSubject: false,
+  },
 ];
 
 function buildPromptForChannel(
@@ -149,7 +155,7 @@ export async function generateAllMessages(
     }
   }
 
-  if (Object.keys(errors).length > 3 && !results.email && !results.linkedin && !results.whatsapp && !results.proposalIntro) {
+  if (Object.keys(errors).length > 4 && !results.email && !results.linkedin && !results.whatsapp && !results.proposalIntro && !results.phoneScript) {
     return { ok: false, errors };
   }
 
@@ -161,6 +167,7 @@ export async function generateAllMessages(
       linkedin: results.linkedin || { body: 'Could not generate. Tap retry to try again.', edited: false },
       whatsapp: results.whatsapp || { body: 'Could not generate. Tap retry to try again.', edited: false },
       proposalIntro: results.proposalIntro || { body: 'Could not generate. Tap retry to try again.', edited: false },
+      phoneScript: results.phoneScript || { body: 'Could not generate. Tap retry to try again.', edited: false },
       generatedAt: now,
     },
   };

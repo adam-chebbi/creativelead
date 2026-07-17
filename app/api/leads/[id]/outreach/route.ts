@@ -8,6 +8,7 @@ const CHANNEL_MAP: Record<string, string> = {
   linkedin: 'linkedin',
   whatsapp: 'whatsapp',
   proposalIntro: 'proposal_intro',
+  phoneScript: 'phoneScript',
 };
 
 const CHANNEL_MAP_REVERSE: Record<string, string> = {
@@ -15,6 +16,7 @@ const CHANNEL_MAP_REVERSE: Record<string, string> = {
   linkedin: 'linkedin',
   whatsapp: 'whatsapp',
   proposal_intro: 'proposalIntro',
+  phoneScript: 'phoneScript',
 };
 
 async function fetchMessagesForLead(leadId: string) {
@@ -57,7 +59,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     // Single channel for a single lead
     if (channel) {
-      const validChannels = ['email', 'linkedin', 'whatsapp', 'proposalIntro'];
+      const validChannels = ['email', 'linkedin', 'whatsapp', 'proposalIntro', 'phoneScript'];
       if (!validChannels.includes(channel)) {
         return NextResponse.json({ error: `Invalid channel. Must be one of: ${validChannels.join(', ')}` }, { status: 400 });
       }

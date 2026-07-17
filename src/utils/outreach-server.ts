@@ -35,7 +35,7 @@ interface LeadContext {
 }
 
 interface ChannelSpec {
-  key: 'email' | 'linkedin' | 'whatsapp' | 'proposalIntro';
+  key: 'email' | 'linkedin' | 'whatsapp' | 'proposalIntro' | 'phoneScript';
   label: string;
   instruction: string;
   requiresSubject: boolean;
@@ -64,6 +64,12 @@ const OUTREACH_CHANNELS: ChannelSpec[] = [
     key: 'proposalIntro',
     label: 'Proposal Introduction',
     instruction: 'Write a professional proposal introduction paragraph (3-4 sentences). This is the opening section of a formal proposal document. Reference the recommended service. Tone: confident, respectful, solution-oriented. No subject line.',
+    requiresSubject: false,
+  },
+  {
+    key: 'phoneScript',
+    label: 'Phone Call Script',
+    instruction: 'Write a structured outbound cold-call script with these clearly labeled sections:\n- Opening / Introduction (10-15 seconds, states who you are and why you are calling)\n- Permission-based hook referencing one specific detected gap or positive signal about the business (use only real data provided, never fabricate)\n- 2-3 short discovery questions to qualify the prospect and uncover pain points\n- Brief value proposition tied to the recommended service\n- Objection-handling notes for the 2 most likely objections with a one-line response to each\n- Clear call to action / next step\nTone: confident, conversational, respectful of the business owner\'s time — written the way a real person would speak on the phone, not like an email.',
     requiresSubject: false,
   },
 ];
@@ -225,7 +231,7 @@ async function callAiForMessage(
 export async function generateAndPersistMessage(
   leadId: string,
   orgId: string,
-  channel: 'email' | 'linkedin' | 'whatsapp' | 'proposalIntro',
+  channel: 'email' | 'linkedin' | 'whatsapp' | 'proposalIntro' | 'phoneScript',
   aiConfig: AiOutreachConfig,
 ): Promise<{ ok: boolean; error?: string; editedBlocked?: boolean }> {
   const ctx = await getLeadContext(leadId, orgId);

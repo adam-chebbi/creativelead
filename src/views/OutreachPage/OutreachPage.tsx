@@ -102,7 +102,7 @@ export const OutreachPage: React.FC = () => {
       const json = await res.json();
       if (json.ok && json.messages) {
         const updated: OutreachMessages = {
-          ...(messages || { email: { body: '', edited: false }, linkedin: { body: '', edited: false }, whatsapp: { body: '', edited: false }, proposalIntro: { body: '', edited: false }, generatedAt: new Date().toISOString() }),
+          ...(messages || { email: { body: '', edited: false }, linkedin: { body: '', edited: false }, whatsapp: { body: '', edited: false }, proposalIntro: { body: '', edited: false }, phoneScript: { body: '', edited: false }, generatedAt: new Date().toISOString() }),
           ...json.messages,
           generatedAt: new Date().toISOString(),
         };

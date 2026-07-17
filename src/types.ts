@@ -116,6 +116,7 @@ export interface OutreachMessages {
   linkedin: OutreachMessage;
   whatsapp: OutreachMessage;
   proposalIntro: OutreachMessage;
+  phoneScript: OutreachMessage;
   generatedAt: string;
 }
 
