@@ -59,12 +59,16 @@ export interface OpportunityConfig {
 }
 
 export interface ProviderCredentials {
+  emailProvider: 'smtp' | 'sendgrid' | 'gmail' | 'resend';
   emailSmtpHost: string;
   emailSmtpPort: number;
   emailSmtpUser: string;
   emailSmtpPass: string;
   emailFromAddress: string;
   emailFromName: string;
+  gmailAddress: string;
+  gmailAppPassword: string;
+  resendApiKey: string;
   twilioAccountSid: string;
   twilioAuthToken: string;
   twilioSmsFromNumber: string;
@@ -141,12 +145,16 @@ const DEFAULT_SETTINGS: AppSettings = {
     thresholds: THRESHOLD_DEFAULTS,
   },
   providers: {
+    emailProvider: 'sendgrid',
     emailSmtpHost: '',
     emailSmtpPort: 587,
     emailSmtpUser: '',
     emailSmtpPass: '',
     emailFromAddress: '',
     emailFromName: '',
+    gmailAddress: '',
+    gmailAppPassword: '',
+    resendApiKey: '',
     twilioAccountSid: '',
     twilioAuthToken: '',
     twilioSmsFromNumber: '',

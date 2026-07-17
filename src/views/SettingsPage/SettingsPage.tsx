@@ -386,17 +386,56 @@ export const SettingsPage: React.FC = () => {
           <div className="card" style={cardStyle}>
             <h2 className="section-title">Campaign Provider Credentials</h2>
             <p className="section-subtitle" style={{ marginBottom: '1.5rem' }}>Configure sending providers for email, SMS, and WhatsApp campaigns.</p>
-            <h3 style={{ fontSize: '1rem', color: 'var(--color-primary-light)', marginBottom: '0.75rem' }}>Email (SMTP / SendGrid)</h3>
+
+            <h3 style={{ fontSize: '1rem', color: 'var(--color-primary-light)', marginBottom: '0.75rem' }}>Email Provider</h3>
+
+            <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+              <label>Provider</label>
+              <select
+                className="input"
+                value={providers.emailProvider}
+                onChange={e => handleProviderChange('emailProvider', e.target.value)}
+                style={{ width: '100%' }}
+              >
+                <option value="sendgrid">SendGrid (via API key)</option>
+                <option value="smtp">Generic SMTP</option>
+                <option value="gmail">Gmail (App Password)</option>
+                <option value="resend">Resend</option>
+              </select>
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
-              <div className="form-group" style={{ marginBottom: 0 }}><label>SMTP Host</label><input type="text" className="input" placeholder="smtp.sendgrid.net" value={providers.emailSmtpHost} onChange={handleProviderField('emailSmtpHost')} /></div>
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <div className="form-group" style={{ flex: 2, marginBottom: 0 }}><label>SMTP Username</label><input type="text" className="input" placeholder="apikey" value={providers.emailSmtpUser} onChange={handleProviderField('emailSmtpUser')} /></div>
-                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Port</label><input type="number" className="input" value={providers.emailSmtpPort} onChange={e => handleProviderChange('emailSmtpPort', parseInt(e.target.value, 10) || 587)} /></div>
-              </div>
-              <div className="form-group" style={{ marginBottom: 0 }}><label>API Key / Password</label><input type="password" className="input" placeholder="SendGrid API key" value={providers.emailSmtpPass} onChange={handleProviderField('emailSmtpPass')} /></div>
+              {providers.emailProvider === 'smtp' && (
+                <>
+                  <div className="form-group" style={{ marginBottom: 0 }}><label>SMTP Host</label><input type="text" className="input" placeholder="smtp.sendgrid.net" value={providers.emailSmtpHost} onChange={handleProviderField('emailSmtpHost')} /></div>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div className="form-group" style={{ flex: 2, marginBottom: 0 }}><label>SMTP Username</label><input type="text" className="input" placeholder="apikey" value={providers.emailSmtpUser} onChange={handleProviderField('emailSmtpUser')} /></div>
+                    <div className="form-group" style={{ flex: 1, marginBottom: 0 }}><label>Port</label><input type="number" className="input" value={providers.emailSmtpPort} onChange={e => handleProviderChange('emailSmtpPort', parseInt(e.target.value, 10) || 587)} /></div>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}><label>Password</label><input type="password" className="input" placeholder="SMTP password" value={providers.emailSmtpPass} onChange={handleProviderField('emailSmtpPass')} /></div>
+                </>
+              )}
+              {providers.emailProvider === 'sendgrid' && (
+                <>
+                  <div className="form-group" style={{ marginBottom: 0 }}><label>SendGrid API Key</label><input type="password" className="input" placeholder="SG.xxxx" value={providers.emailSmtpPass} onChange={handleProviderField('emailSmtpPass')} /></div>
+                </>
+              )}
+              {providers.emailProvider === 'gmail' && (
+                <>
+                  <div className="form-group" style={{ marginBottom: 0 }}><label>Gmail Address</label><input type="email" className="input" placeholder="you@gmail.com" value={providers.gmailAddress} onChange={handleProviderField('gmailAddress')} /></div>
+                  <div className="form-group" style={{ marginBottom: 0 }}><label>App Password</label><input type="password" className="input" placeholder="16-char app password" value={providers.gmailAppPassword} onChange={handleProviderField('gmailAppPassword')} /></div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: 0 }}>Use a Gmail App Password (Google Account &gt; Security &gt; 2-Step Verification &gt; App Passwords), not your regular Gmail password.</p>
+                </>
+              )}
+              {providers.emailProvider === 'resend' && (
+                <>
+                  <div className="form-group" style={{ marginBottom: 0 }}><label>Resend API Key</label><input type="password" className="input" placeholder="re_xxxx" value={providers.resendApiKey} onChange={handleProviderField('resendApiKey')} /></div>
+                </>
+              )}
               <div className="form-group" style={{ marginBottom: 0 }}><label>From Email</label><input type="email" className="input" placeholder="you@yourdomain.com" value={providers.emailFromAddress} onChange={handleProviderField('emailFromAddress')} /></div>
               <div className="form-group" style={{ marginBottom: 0 }}><label>From Name</label><input type="text" className="input" placeholder="Your Name" value={providers.emailFromName} onChange={handleProviderField('emailFromName')} /></div>
             </div>
+
             <h3 style={{ fontSize: '1rem', color: 'var(--color-primary-light)', marginBottom: '0.75rem' }}>Twilio (SMS & WhatsApp)</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div style={{ display: 'flex', gap: '1rem' }}>
