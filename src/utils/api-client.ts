@@ -79,6 +79,8 @@ export const PROVIDER_META: Record<AiProvider, ProviderMeta> = {
     docsUrl: 'https://openrouter.ai/keys',
     keyPlaceholder: 'sk-or-v1-...',
     models: [
+      { id: 'deepseek/deepseek-chat:free', label: 'DeepSeek V3 Chat (FREE) — recommended', free: true },
+      { id: 'deepseek/deepseek-r1:free', label: 'DeepSeek R1 Reasoning (FREE)', free: true },
       { id: 'meta-llama/llama-3.1-8b-instruct:free', label: 'Llama 3.1 8B Instruct (FREE)', free: true },
       { id: 'meta-llama/llama-3.2-3b-instruct:free', label: 'Llama 3.2 3B Instruct (FREE)', free: true },
       { id: 'google/gemma-2-9b-it:free', label: 'Gemma 2 9B IT (FREE)', free: true },
@@ -162,7 +164,7 @@ export const PROVIDER_META: Record<AiProvider, ProviderMeta> = {
 export const DEFAULT_MODELS: Record<AiProvider, string> = {
   gemini: 'gemini-2.0-flash',
   openai: 'gpt-4o-mini',
-  openrouter: 'meta-llama/llama-3.1-8b-instruct:free',
+  openrouter: 'deepseek/deepseek-chat:free',
   groq: 'llama-3.1-8b-instant',
   anthropic: 'claude-3-5-haiku-20241022',
   mistral: 'mistral-small-latest',
