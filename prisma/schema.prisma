@@ -14,6 +14,7 @@ model Organization {
   leads     Lead[]
   campaigns Campaign[]
   auditLogs AuditLog[]
+  settings  OrganizationSettings?
 }
 
 model Lead {
@@ -208,6 +209,15 @@ model Campaign {
   createdAt      DateTime     @default(now())
 
   @@index([organizationId])
+}
+
+model OrganizationSettings {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  settings       Json
+  updatedAt      DateTime @updatedAt
+  updatedById    String?
 }
 
 model AuditLog {

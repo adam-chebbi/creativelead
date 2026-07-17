@@ -164,6 +164,38 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 const STORAGE_KEY = 'creativelead_settings';
 
+const SECRET_KEYS = new Set([
+  'geminiApiKey', 'openAiKey', 'openrouterApiKey', 'groqApiKey',
+  'anthropicApiKey', 'mistralApiKey', 'cohereApiKey', 'customApiKey',
+  'enrichmentKey', 'emailSmtpPass', 'gmailAppPassword', 'resendApiKey',
+  'emailSmtpUser', 'twilioAccountSid', 'twilioAuthToken',
+  'twilioSmsFromNumber', 'twilioWhatsAppFromNumber',
+]);
+
+function mergeSettings(base: AppSettings, overrides: Partial<AppSettings>): AppSettings {
+  return {
+    ...base,
+    ...overrides,
+    weights: { ...base.weights, ...(overrides.weights || {}) },
+    scoringChips: Array.isArray(overrides.scoringChips) ? overrides.scoringChips : base.scoringChips,
+    opportunityConfig: {
+      pricing: { ...base.opportunityConfig.pricing, ...(overrides.opportunityConfig?.pricing || {}) },
+      thresholds: { ...base.opportunityConfig.thresholds, ...(overrides.opportunityConfig?.thresholds || {}) },
+    },
+    providers: { ...base.providers, ...(overrides.providers || {}) },
+  };
+}
+
+function mergeApiIntoLocal(local: AppSettings, fromApi: Record<string, unknown>): AppSettings {
+  const nonSecretOverrides: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fromApi)) {
+    if (!SECRET_KEYS.has(key) || !local[key as keyof AppSettings]) {
+      nonSecretOverrides[key] = value;
+    }
+  }
+  return mergeSettings(local, nonSecretOverrides as unknown as Partial<AppSettings>);
+}
+
 export function getSettings(): AppSettings {
   if (typeof window === 'undefined') return DEFAULT_SETTINGS;
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -176,17 +208,7 @@ export function getSettings(): AppSettings {
       if (!parsed.aiProvider) {
         parsed.aiProvider = parsed.openAiKey ? 'openai' : 'gemini';
       }
-      return {
-        ...DEFAULT_SETTINGS,
-        ...parsed,
-        weights: { ...DEFAULT_SETTINGS.weights, ...(parsed.weights || {}) },
-        scoringChips: Array.isArray(parsed.scoringChips) ? parsed.scoringChips : DEFAULT_CHIPS.map(c => ({ ...c })),
-        opportunityConfig: {
-          pricing: { ...DEFAULT_SETTINGS.opportunityConfig.pricing, ...(parsed.opportunityConfig?.pricing || {}) },
-          thresholds: { ...DEFAULT_SETTINGS.opportunityConfig.thresholds, ...(parsed.opportunityConfig?.thresholds || {}) },
-        },
-        providers: { ...DEFAULT_SETTINGS.providers, ...(parsed.providers || {}) },
-      };
+      return mergeSettings(DEFAULT_SETTINGS, parsed);
     } catch (e) {
       console.error('Failed to parse settings', e);
     }
@@ -194,16 +216,54 @@ export function getSettings(): AppSettings {
   return DEFAULT_SETTINGS;
 }
 
-export function saveSettings(settings: AppSettings) {
+export function saveSettings(settings: AppSettings, organizationId?: string) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   window.dispatchEvent(new Event('settingsUpdated'));
+
+  if (organizationId) {
+    const clerk = (window as any).Clerk;
+    const userId = clerk?.session?.user?.id;
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ organizationId, settings, updatedById: userId }),
+    }).catch(() => {});
+  }
 }
 
 export function useSettingsStore() {
   const [settings, setSettings] = useState<AppSettings>(
     typeof window !== 'undefined' ? getSettings() : DEFAULT_SETTINGS
   );
+  const [loadedFromDb, setLoadedFromDb] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const clerk = (window as any).Clerk;
+    const orgId = clerk?.session?.lastActiveOrganizationId || clerk?.organization?.id;
+
+    if (orgId) {
+      fetch(`/api/settings?organizationId=${encodeURIComponent(orgId)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (cancelled) return;
+          if (data.settings && typeof data.settings === 'object') {
+            const local = getSettings();
+            const fromApi = data.settings as Record<string, unknown>;
+            const merged = mergeApiIntoLocal(local, fromApi);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+            setSettings(merged);
+          }
+          setLoadedFromDb(true);
+        })
+        .catch(() => setLoadedFromDb(true));
+    } else {
+      setLoadedFromDb(true);
+    }
+
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const handleUpdate = () => setSettings(getSettings());
@@ -213,10 +273,13 @@ export function useSettingsStore() {
 
   return {
     settings,
+    loadedFromDb,
     updateSettings: (updates: Partial<AppSettings>) => {
       const newSettings = { ...settings, ...updates };
       setSettings(newSettings);
-      saveSettings(newSettings);
+      const clerk = (window as any).Clerk;
+      const orgId = clerk?.session?.lastActiveOrganizationId || clerk?.organization?.id;
+      saveSettings(newSettings, orgId);
     },
   };
 }
