@@ -30,6 +30,32 @@ const updateSchema = z.object({
   reviewCount: z.number().int().optional().nullable(),
 }).strict();
 
+export async function GET(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  let orgId;
+  try {
+    const authContext = await requireAuth(req);
+    orgId = authContext.orgId;
+  } catch (err) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+  try {
+    const lead = await prisma.lead.findFirst({
+      where: { id: params.id, organizationId: orgId },
+      include: { notes: true, followUps: true, attachments: true, stageHistory: true },
+    });
+    if (!lead) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    return NextResponse.json(lead);
+  } catch (error) {
+    console.error('[LEAD_GET]', error);
+    return new NextResponse('Internal Error', { status: 500 });
+  }
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }
@@ -97,6 +123,47 @@ export async function PATCH(
       return NextResponse.json({ error: error.errors }, { status: 400 });
     }
     console.error('[LEAD_PATCH]', error);
+    return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  let userId, orgId;
+  try {
+    const authContext = await requireAuth(req);
+    userId = authContext.userId;
+    orgId = authContext.orgId;
+  } catch (err) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+
+  try {
+    const existing = await prisma.lead.findFirst({
+      where: { id: params.id, organizationId: orgId },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    await prisma.lead.delete({ where: { id: params.id } });
+
+    await prisma.auditLog.create({
+      data: {
+        organizationId: orgId,
+        actorId: userId,
+        action: 'lead.deleted',
+        targetType: 'lead',
+        targetId: params.id,
+        metadata: { businessName: existing.businessName },
+      },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('[LEAD_DELETE]', error);
     return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
   }
 }
