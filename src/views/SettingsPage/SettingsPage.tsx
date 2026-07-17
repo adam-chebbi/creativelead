@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { useSettingsStore, ScoringWeights, ServicePricing, DetectionThresholds, ProviderCredentials } from '@/hooks/useSettingsStore';
+import { useSettingsStore, ScoringWeights, ScoringChip, ServicePricing, DetectionThresholds, ProviderCredentials, DEFAULT_CHIPS } from '@/hooks/useSettingsStore';
 import { Button } from '@/components/ui';
 import { fadeInUp, staggerContainer, defaultTransition } from '@/animations';
 import { AiProvider, testAiConnection, PROVIDER_META, DEFAULT_MODELS, ModelOption } from '@/utils/api-client';
@@ -39,6 +39,9 @@ export const SettingsPage: React.FC = () => {
   const [sheetsSyncing, setSheetsSyncing] = useState(false);
   const [sheetsResult, setSheetsResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [weights, setWeights] = useState<ScoringWeights>(settings.weights);
+  const [scoringChips, setScoringChips] = useState<ScoringChip[]>(
+    Array.isArray(settings.scoringChips) ? settings.scoringChips.map(c => ({ ...c })) : DEFAULT_CHIPS.map(c => ({ ...c }))
+  );
   const [pricing, setPricing] = useState<ServicePricing>(settings.opportunityConfig.pricing);
   const [thresholds, setThresholds] = useState<DetectionThresholds>(settings.opportunityConfig.thresholds);
   const [providers, setProviders] = useState<ProviderCredentials>(settings.providers);
@@ -74,6 +77,27 @@ export const SettingsPage: React.FC = () => {
     document.addEventListener('click', handler, true);
     return () => document.removeEventListener('click', handler, true);
   }, [isDirty]);
+
+  const activeChips = scoringChips.filter(c => c.enabled);
+  const totalPoints = activeChips.reduce((s, c) => s + c.points, 0);
+  const isFull = totalPoints >= 100;
+
+  const handleChipToggle = (id: string) => {
+    setScoringChips(prev => prev.map(c => c.id === id ? { ...c, enabled: !c.enabled } : c));
+    markDirty();
+  };
+
+  const handleChipPoints = (id: string, points: number) => {
+    setScoringChips(prev => {
+      const old = prev.find(c => c.id === id);
+      if (!old) return prev;
+      const otherTotal = prev.filter(c => c.id !== id && c.enabled).reduce((s, c) => s + c.points, 0);
+      const capped = Math.max(1, Math.min(100, points));
+      if (otherTotal + capped > 100) return prev.map(c => c.id === id ? { ...c, points: 100 - otherTotal } : c);
+      return prev.map(c => c.id === id ? { ...c, points: capped } : c);
+    });
+    markDirty();
+  };
 
   const handleWeightChange = (key: keyof ScoringWeights, value: number) => {
     setWeights(prev => ({ ...prev, [key]: value }));
@@ -127,7 +151,7 @@ export const SettingsPage: React.FC = () => {
     updateSettings({
       aiProvider, aiModel, geminiApiKey, openAiKey, openrouterApiKey, groqApiKey,
       anthropicApiKey, mistralApiKey, cohereApiKey, customApiBase, customApiKey, customModel,
-      enrichmentKey, enrichmentProvider, googleSheetsUrl, weights,
+      enrichmentKey, enrichmentProvider, googleSheetsUrl, weights, scoringChips,
       opportunityConfig: { pricing, thresholds }, providers,
     });
     setIsSaved(true); setIsDirty(false);
@@ -141,7 +165,8 @@ export const SettingsPage: React.FC = () => {
     setCohereApiKey(settings.cohereApiKey); setCustomApiBase(settings.customApiBase); setCustomApiKey(settings.customApiKey);
     setCustomModel(settings.customModel); setEnrichmentKey(settings.enrichmentKey); setEnrichmentProvider(settings.enrichmentProvider);
     setGoogleSheetsUrl(settings.googleSheetsUrl || '');
-    setWeights(settings.weights); setPricing(settings.opportunityConfig.pricing); setThresholds(settings.opportunityConfig.thresholds);
+    setWeights(settings.weights); setScoringChips(Array.isArray(settings.scoringChips) ? settings.scoringChips.map(c => ({ ...c })) : DEFAULT_CHIPS.map(c => ({ ...c })));
+    setPricing(settings.opportunityConfig.pricing); setThresholds(settings.opportunityConfig.thresholds);
     setProviders(settings.providers);
     setIsDirty(false); setShowUnsavedModal(false);
     if (pendingTab) { setActiveTab(pendingTab); setPendingTab(null); }
@@ -259,16 +284,68 @@ export const SettingsPage: React.FC = () => {
       case 'scoring':
         return (
           <div className="card" style={cardStyle}>
-            <h2 className="section-title">AI Scoring Algorithm (Weights)</h2>
-            <p className="section-subtitle" style={{ marginBottom: '1.5rem' }}>Adjust the weight of each criteria. The final AI Score is calculated based on these multipliers.</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <WeightSlider label="Website Modernization" value={weights.opportunity} onChange={(v) => handleWeightChange('opportunity', v)} />
-              <WeightSlider label="Digital Presence" value={weights.competition} onChange={(v) => handleWeightChange('competition', v)} />
-              <WeightSlider label="Client Value & Growth" value={weights.growth} onChange={(v) => handleWeightChange('growth', v)} />
-              <WeightSlider label="SEO & Local Search" value={weights.seo} onChange={(v) => handleWeightChange('seo', v)} />
-              <WeightSlider label="Performance & UX" value={weights.website} onChange={(v) => handleWeightChange('website', v)} />
-              <WeightSlider label="Reputation Management" value={weights.reputation} onChange={(v) => handleWeightChange('reputation', v)} />
+            <h2 className="section-title">AI Scoring Algorithm (Chips)</h2>
+            <p className="section-subtitle" style={{ marginBottom: '1.5rem' }}>
+              Select scoring factors and assign point values. The AI Score is the sum of points for each factor detected on a lead. Max 100 points total.
+            </p>
+
+            <div style={{ marginBottom: '1.5rem', padding: '0.75rem 1rem', background: isFull ? 'var(--color-success-bg, #064e3b)' : 'var(--color-bg-secondary, #1e293b)', borderRadius: '8px', textAlign: 'center', fontWeight: 700, fontSize: '1.1rem', color: isFull ? 'var(--color-success, #10b981)' : 'var(--color-text)' }}>
+              {totalPoints} / 100 used
+              {isFull && <span style={{ display: 'block', fontSize: '0.8rem', fontWeight: 400, marginTop: '0.25rem' }}>Your scoring model is fully allocated. Remove or reduce a factor to make changes.</span>}
             </div>
+
+            <h3 style={{ fontSize: '0.9rem', color: 'var(--color-primary-light)', marginBottom: '0.75rem' }}>Active Scoring Factors ({activeChips.length})</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.5rem' }}>
+              {scoringChips.filter(c => c.enabled).map(chip => (
+                <div key={chip.id} style={{
+                  display: 'flex', alignItems: 'center', gap: '0.4rem',
+                  padding: '0.35rem 0.6rem', borderRadius: '20px',
+                  background: 'var(--color-primary, #3b82f6)', color: '#fff', fontSize: '0.78rem',
+                }}>
+                  <span>{chip.label}</span>
+                  <input
+                    type="number" min="1" max="100" value={chip.points}
+                    onChange={e => handleChipPoints(chip.id, parseInt(e.target.value, 10) || 1)}
+                    style={{ width: '40px', padding: '0.1rem 0.2rem', fontSize: '0.75rem', textAlign: 'center', border: 'none', borderRadius: '4px', background: 'rgba(255,255,255,0.2)', color: '#fff' }}
+                    disabled={isFull}
+                  />
+                  <button onClick={() => handleChipToggle(chip.id)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '0.9rem', lineHeight: 1, padding: 0 }} title="Remove factor">×</button>
+                </div>
+              ))}
+              {activeChips.length === 0 && <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>No factors selected. Click chips below to add them.</p>}
+            </div>
+
+            <h3 style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', marginBottom: '0.75rem' }}>Available Factors</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {scoringChips.filter(c => !c.enabled).map(chip => (
+                <button
+                  key={chip.id}
+                  onClick={() => !isFull && handleChipToggle(chip.id)}
+                  disabled={isFull}
+                  title={isFull ? 'Score is fully allocated — remove or lower another factor first' : `${chip.description} (${chip.points} pts)`}
+                  style={{
+                    padding: '0.35rem 0.8rem', borderRadius: '20px', fontSize: '0.78rem',
+                    background: isFull ? 'var(--color-bg-secondary, #1e293b)' : 'var(--color-bg-secondary, #1e293b)',
+                    color: isFull ? 'var(--color-text-muted, #64748b)' : 'var(--color-text)',
+                    border: '1px dashed var(--color-border, #334155)', cursor: isFull ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  + {chip.label}
+                </button>
+              ))}
+            </div>
+
+            <details style={{ marginTop: '1.5rem' }}>
+              <summary style={{ cursor: 'pointer', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Show old weight sliders (legacy fallback)</summary>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '1rem' }}>
+                <WeightSlider label="Website Modernization" value={weights.opportunity} onChange={(v) => handleWeightChange('opportunity', v)} />
+                <WeightSlider label="Digital Presence" value={weights.competition} onChange={(v) => handleWeightChange('competition', v)} />
+                <WeightSlider label="Client Value & Growth" value={weights.growth} onChange={(v) => handleWeightChange('growth', v)} />
+                <WeightSlider label="SEO & Local Search" value={weights.seo} onChange={(v) => handleWeightChange('seo', v)} />
+                <WeightSlider label="Performance & UX" value={weights.website} onChange={(v) => handleWeightChange('website', v)} />
+                <WeightSlider label="Reputation Management" value={weights.reputation} onChange={(v) => handleWeightChange('reputation', v)} />
+              </div>
+            </details>
           </div>
         );
 

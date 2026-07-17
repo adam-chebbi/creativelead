@@ -1,6 +1,31 @@
 import { useState, useEffect } from 'react';
 import { AiProvider } from '../utils/api-client';
 
+export interface ScoringChip {
+  id: string;
+  label: string;
+  description: string;
+  points: number;
+  enabled: boolean;
+}
+
+export const DEFAULT_CHIPS: ScoringChip[] = [
+  { id: 'missing-website', label: 'Missing Website', description: 'Business has no website', points: 10, enabled: true },
+  { id: 'outdated-tech', label: 'Outdated Website Technology', description: 'Website uses outdated tech stack', points: 8, enabled: true },
+  { id: 'poor-social', label: 'Poor Social Media Presence', description: 'Missing or inactive social profiles', points: 8, enabled: true },
+  { id: 'unclaimed-profiles', label: 'Unclaimed Business Profiles', description: 'Not claimed on key directories', points: 6, enabled: true },
+  { id: 'mobile-issues', label: 'Mobile Responsiveness Issues', description: 'Website not mobile-friendly', points: 8, enabled: true },
+  { id: 'slow-load', label: 'Slow Page Load Speed', description: 'Website loads slowly', points: 7, enabled: true },
+  { id: 'accessibility', label: 'Accessibility Issues', description: 'Website has accessibility problems', points: 5, enabled: true },
+  { id: 'missing-seo', label: 'Missing SEO Basics', description: 'Missing title/meta/H1 tags', points: 8, enabled: true },
+  { id: 'poor-local-seo', label: 'Poor Local Search / Maps Presence', description: 'Weak local search visibility', points: 7, enabled: true },
+  { id: 'low-reviews', label: 'Low Review Count', description: 'Business has few reviews', points: 7, enabled: true },
+  { id: 'low-rating', label: 'Sub-4.0 Star Rating', description: 'Rating below 4.0 stars', points: 8, enabled: true },
+  { id: 'no-analytics', label: 'No Analytics Installed', description: 'Website missing analytics', points: 5, enabled: true },
+  { id: 'no-chatbot', label: 'No Live Chat / Chatbot', description: 'No chat or chatbot on website', points: 4, enabled: true },
+  { id: 'high-ticket', label: 'High-Ticket Business Category', description: 'High-value service business', points: 9, enabled: true },
+];
+
 export interface ScoringWeights {
   opportunity: number;
   competition: number;
@@ -63,6 +88,7 @@ export interface AppSettings {
   enrichmentProvider: 'hunter' | 'clearbit' | 'apollo' | 'none';
   googleSheetsUrl: string;
   weights: ScoringWeights;
+  scoringChips: ScoringChip[];
   opportunityConfig: OpportunityConfig;
   providers: ProviderCredentials;
 }
@@ -109,6 +135,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     website: 15,
     reputation: 15,
   },
+  scoringChips: [...DEFAULT_CHIPS.map(c => ({ ...c }))],
   opportunityConfig: {
     pricing: PRICING_DEFAULTS,
     thresholds: THRESHOLD_DEFAULTS,
@@ -145,6 +172,7 @@ export function getSettings(): AppSettings {
         ...DEFAULT_SETTINGS,
         ...parsed,
         weights: { ...DEFAULT_SETTINGS.weights, ...(parsed.weights || {}) },
+        scoringChips: Array.isArray(parsed.scoringChips) ? parsed.scoringChips : DEFAULT_CHIPS.map(c => ({ ...c })),
         opportunityConfig: {
           pricing: { ...DEFAULT_SETTINGS.opportunityConfig.pricing, ...(parsed.opportunityConfig?.pricing || {}) },
           thresholds: { ...DEFAULT_SETTINGS.opportunityConfig.thresholds, ...(parsed.opportunityConfig?.thresholds || {}) },

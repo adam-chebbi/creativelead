@@ -1,8 +1,43 @@
 import { Lead, EnrichmentEvidence } from '../types';
-import { getSettings } from '../hooks/useSettingsStore';
+import { getSettings, ScoringChip } from '../hooks/useSettingsStore';
 import { callAi } from './api-client';
 import { scrapeWebsiteContacts, ScrapedContacts } from './website-scraper';
 import { runEnrichmentApi } from './enrichment-client';
+
+function chipScore(lead: Partial<Lead>, chips: ScoringChip[]): number {
+  const wi = lead.website_intelligence;
+  const rating = lead.rating;
+  const reviewCount = lead.review_count;
+  const hasWebsite = !!lead.website;
+  const hasPhone = !!(lead.phone_number || lead.phone || lead.additional_phones?.length);
+  const hasEmail = !!(lead.email || lead.emails?.length);
+  const hasCoords = !!(lead.latitude && lead.longitude);
+  const hasSocial = !!(lead.linkedin || lead.facebook || lead.instagram || lead.tiktok || lead.youtube);
+
+  let total = 0;
+  for (const chip of chips) {
+    if (!chip.enabled || chip.points <= 0) continue;
+    let triggered = false;
+    switch (chip.id) {
+      case 'missing-website': triggered = !hasWebsite; break;
+      case 'outdated-tech': triggered = !!(wi?.reachable && !wi?.hasViewportMeta); break;
+      case 'poor-social': triggered = !hasSocial && hasWebsite; break;
+      case 'unclaimed-profiles': triggered = hasWebsite && !hasSocial; break;
+      case 'mobile-issues': triggered = !!(wi?.reachable && !wi?.hasViewportMeta); break;
+      case 'slow-load': triggered = (wi?.performance?.loadTimeMs ?? 9999) > 3000; break;
+      case 'accessibility': triggered = (wi?.seo?.missingAltCount ?? 0) > 5; break;
+      case 'missing-seo': triggered = !!(wi?.reachable && (!wi?.seo?.hasTitle || !wi?.seo?.hasMetaDescription)); break;
+      case 'poor-local-seo': triggered = !hasCoords && !hasPhone; break;
+      case 'low-reviews': triggered = (reviewCount ?? 0) < 10; break;
+      case 'low-rating': triggered = (rating ?? 5) < 4.0 && (reviewCount ?? 0) > 0; break;
+      case 'no-analytics': triggered = !!(wi?.reachable && !wi?.hasAnalytics); break;
+      case 'no-chatbot': triggered = !!(wi?.reachable && !wi?.hasChatbot); break;
+      case 'high-ticket': triggered = true; break;
+    }
+    if (triggered) total += chip.points;
+  }
+  return Math.min(100, total);
+}
 
 export function generateAIScores(lead: Partial<Lead>): Partial<Lead> {
   const rating = lead.rating;
@@ -87,23 +122,26 @@ export function generateAIScores(lead: Partial<Lead>): Partial<Lead> {
   let opportunity_score = Math.round((seo_weakness * 0.6) + ((100 - (website_quality ?? 50)) * 0.4));
 
   const settings = getSettings();
-  const w = settings.weights;
+  const chips = settings.scoringChips;
 
-  const totalWeight = w.opportunity + w.competition + w.growth + w.seo + w.website + w.reputation;
-  const weightFactor = totalWeight > 0 ? totalWeight : 1;
-
-  const wq = website_quality ?? 50;
-  const rr = review_reputation ?? 50;
-
-  let ai_score =
-    (opportunity_score * (w.opportunity / weightFactor)) +
-    ((100 - competition_score) * (w.competition / weightFactor)) +
-    (growth_score * (w.growth / weightFactor)) +
-    ((100 - seo_weakness) * (w.seo / weightFactor)) +
-    (wq * (w.website / weightFactor)) +
-    (rr * (w.reputation / weightFactor));
-
-  ai_score = Math.round(Math.min(100, Math.max(0, ai_score)));
+  let ai_score: number;
+  if (chips && chips.length > 0) {
+    ai_score = chipScore(lead, chips);
+  } else {
+    const w = settings.weights;
+    const totalWeight = w.opportunity + w.competition + w.growth + w.seo + w.website + w.reputation;
+    const weightFactor = totalWeight > 0 ? totalWeight : 1;
+    const wq = website_quality ?? 50;
+    const rr = review_reputation ?? 50;
+    ai_score =
+      (opportunity_score * (w.opportunity / weightFactor)) +
+      ((100 - competition_score) * (w.competition / weightFactor)) +
+      (growth_score * (w.growth / weightFactor)) +
+      ((100 - seo_weakness) * (w.seo / weightFactor)) +
+      (wq * (w.website / weightFactor)) +
+      (rr * (w.reputation / weightFactor));
+    ai_score = Math.round(Math.min(100, Math.max(0, ai_score)));
+  }
 
   let classification: 'Hot' | 'Warm' | 'Cold' = 'Cold';
   if (ai_score >= 75) classification = 'Hot';
