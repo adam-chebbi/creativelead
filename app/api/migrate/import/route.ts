@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from '@/lib/auth';
-import { requireRole } from '@/lib/requireRole';
+import { incrementCounter } from '@/lib/quota';
 import { z } from 'zod';
 
 const indexedDbLeadSchema = z.object({
@@ -25,7 +25,7 @@ const indexedDbLeadSchema = z.object({
 const batchSchema = z.array(indexedDbLeadSchema).max(200, 'Maximum 200 leads per batch');
 
 export async function POST(req: Request) {
-  let caller: { userId: string; orgId: string };
+  let caller: { userId: string; workspaceId: string };
   try {
     caller = await requireAuth(req);
   } catch (err) {
@@ -53,14 +53,14 @@ export async function POST(req: Request) {
           try {
             await prisma.lead.upsert({
               where: {
-                organizationId_phone: {
-                  organizationId: caller.orgId,
+                workspaceId_phone: {
+                  workspaceId: caller.workspaceId,
                   phone: phone ?? '__no_phone__',
                 },
               },
               update: {},
               create: {
-                organizationId: caller.orgId,
+                workspaceId: caller.workspaceId,
                 createdById: caller.userId,
                 businessName,
                 category: lead.category,
@@ -89,13 +89,14 @@ export async function POST(req: Request) {
 
     await prisma.auditLog.create({
       data: {
-        organizationId: caller.orgId,
+        workspaceId: caller.workspaceId,
         actorId: caller.userId,
         action: 'leads.migration_batch',
         metadata: { attempted: leads.length, imported: importedCount },
       },
     });
 
+    incrementCounter(caller.workspaceId, 'leads_ingested', importedCount).catch(() => {});
     return NextResponse.json({ success: true, count: importedCount });
   } catch (error) {
     if (error instanceof z.ZodError) {

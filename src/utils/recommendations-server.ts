@@ -80,9 +80,9 @@ interface LeadRow {
   } | null;
 }
 
-async function getLeads(orgId: string): Promise<LeadRow[]> {
+async function getLeads(workspaceId: string): Promise<LeadRow[]> {
   const leads = await prisma.lead.findMany({
-    where: { organizationId: orgId },
+    where: { workspaceId: workspaceId },
     include: {
       enrichment: { select: { linkedinUrl: true, facebookUrl: true, instagramUrl: true, tiktokUrl: true, youtubeUrl: true } },
       opportunity: { select: { detectedGaps: true, estimatedDealValue: true, conversionProbability: true } },
@@ -228,10 +228,10 @@ export interface RecommendationsResult {
 }
 
 export async function computeRecommendations(
-  orgId: string,
+  workspaceId: string,
   referenceLeadId?: string,
 ): Promise<RecommendationsResult> {
-  const leads = await getLeads(orgId);
+  const leads = await getLeads(workspaceId);
   const now = Date.now();
   const computedAt = new Date().toISOString();
 

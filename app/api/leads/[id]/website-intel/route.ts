@@ -6,11 +6,11 @@ export async function POST(
   req: Request,
   { params }: { params: { id: string } },
 ) {
-  let userId, orgId;
+  let userId, workspaceId;
   try {
     const authContext = await requireAuth(req);
     userId = authContext.userId;
-    orgId = authContext.orgId;
+    workspaceId = authContext.workspaceId;
   } catch {
     return new NextResponse('Unauthorized', { status: 401 });
   }
@@ -19,7 +19,7 @@ export async function POST(
   const forceRefresh = url.searchParams.get('force') === 'true';
 
   try {
-    const result = await analyzeWebsiteServer(params.id, orgId, forceRefresh);
+    const result = await analyzeWebsiteServer(params.id, workspaceId, forceRefresh);
     if (!result.ok) {
       return NextResponse.json({ error: result.error || 'Analysis failed' }, { status: 400 });
     }

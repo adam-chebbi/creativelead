@@ -46,9 +46,9 @@ function buildWebsiteIntelSignals(lead: any): WebsiteIntelSignals | null {
   };
 }
 
-export async function getScoringInputFromDb(leadId: string, orgId: string): Promise<ScoringInput | null> {
+export async function getScoringInputFromDb(leadId: string, workspaceId: string): Promise<ScoringInput | null> {
   const lead = await prisma.lead.findFirst({
-    where: { id: leadId, organizationId: orgId },
+    where: { id: leadId, workspaceId: workspaceId },
     include: {
       enrichment: true,
       websiteIntel: true,
@@ -74,10 +74,10 @@ export async function getScoringInputFromDb(leadId: string, orgId: string): Prom
 
 export async function scoreLead(
   leadId: string,
-  orgId: string,
+  workspaceId: string,
   aiConfig?: AiCallConfig,
 ): Promise<ScoringResult | null> {
-  const input = await getScoringInputFromDb(leadId, orgId);
+  const input = await getScoringInputFromDb(leadId, workspaceId);
   if (!input) return null;
 
   const subScores = computeScores(input);
@@ -173,9 +173,9 @@ export async function scoreLead(
 
 export async function scoreLeadById(
   leadId: string,
-  orgId: string,
+  workspaceId: string,
 ): Promise<ScoringResult | null> {
-  const input = await getScoringInputFromDb(leadId, orgId);
+  const input = await getScoringInputFromDb(leadId, workspaceId);
   if (!input) return null;
 
   const subScores = computeScores(input);

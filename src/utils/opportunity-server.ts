@@ -132,9 +132,9 @@ interface LeadData {
   } | null;
 }
 
-async function getLeadData(leadId: string, orgId: string): Promise<LeadData | null> {
+async function getLeadData(leadId: string, workspaceId: string): Promise<LeadData | null> {
   const lead = await prisma.lead.findFirst({
-    where: { id: leadId, organizationId: orgId },
+    where: { id: leadId, workspaceId: workspaceId },
     include: {
       enrichment: true,
       websiteIntel: true,
@@ -521,11 +521,11 @@ function computeDealValue(
 
 export async function analyzeOpportunity(
   leadId: string,
-  orgId: string,
+  workspaceId: string,
   pricing?: PricingConfig,
   thresholds?: ThresholdConfig,
 ): Promise<{ ok: boolean; error?: string }> {
-  const lead = await getLeadData(leadId, orgId);
+  const lead = await getLeadData(leadId, workspaceId);
   if (!lead) return { ok: false, error: 'Lead not found' };
 
   const p = pricing || PRICING_DEFAULTS;

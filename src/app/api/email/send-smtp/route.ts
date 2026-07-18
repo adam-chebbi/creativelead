@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
+import { requireAuth } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAuth(req);
     const { host, port, secure, user, pass, from, fromName, to, subject, text } = await req.json();
 
     if (!host || !user || !pass || !from || !to || !subject || !text) {

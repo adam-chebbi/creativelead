@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from '@/lib/auth';
 import { z } from 'zod';
-import { scoreLeadById, shouldRescoreOnUpdate } from '@/utils/score-lead-server';
+import { shouldRescoreOnUpdate } from '@/utils/score-lead-server';
+import { enqueueJob } from '@/lib/queue';
 
 const updateSchema = z.object({
   pipelineStage: z.string().optional(),
@@ -34,16 +35,16 @@ export async function GET(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  let orgId;
+  let workspaceId;
   try {
     const authContext = await requireAuth(req);
-    orgId = authContext.orgId;
+    workspaceId = authContext.workspaceId;
   } catch (err) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
   try {
     const lead = await prisma.lead.findFirst({
-      where: { id: params.id, organizationId: orgId },
+      where: { id: params.id, workspaceId: workspaceId },
       include: { notes: true, followUps: true, attachments: true, stageHistory: true },
     });
     if (!lead) {
@@ -60,11 +61,11 @@ export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  let userId, orgId;
+  let userId, workspaceId;
   try {
     const authContext = await requireAuth(req);
     userId = authContext.userId;
-    orgId = authContext.orgId;
+    workspaceId = authContext.workspaceId;
   } catch (err) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
@@ -74,7 +75,7 @@ export async function PATCH(
     const data = updateSchema.parse(body);
 
     const existing = await prisma.lead.findFirst({
-      where: { id: params.id, organizationId: orgId },
+      where: { id: params.id, workspaceId: workspaceId },
     });
     if (!existing) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -92,8 +93,8 @@ export async function PATCH(
       { rating: existing.rating, reviewCount: existing.reviewCount, website: existing.website, category: existing.category, city: existing.city },
       { rating: data.rating, reviewCount: data.reviewCount, website: data.website, category: data.category, city: data.city },
     )) {
-      scoreLeadById(params.id, orgId).catch((err) =>
-        console.error(`[LEAD_PATCH] rescore failed for ${params.id}:`, err)
+      enqueueJob(params.id, 'scoring').catch((err) =>
+        console.error(`[LEAD_PATCH] enqueue rescore failed for ${params.id}:`, err)
       );
     }
 
@@ -107,7 +108,7 @@ export async function PATCH(
       });
       await prisma.auditLog.create({
         data: {
-          organizationId: orgId,
+          workspaceId: workspaceId,
           actorId: userId,
           action: 'lead.stage_changed',
           targetType: 'lead',
@@ -131,18 +132,18 @@ export async function DELETE(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  let userId, orgId;
+  let userId, workspaceId;
   try {
     const authContext = await requireAuth(req);
     userId = authContext.userId;
-    orgId = authContext.orgId;
+    workspaceId = authContext.workspaceId;
   } catch (err) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
   try {
     const existing = await prisma.lead.findFirst({
-      where: { id: params.id, organizationId: orgId },
+      where: { id: params.id, workspaceId: workspaceId },
     });
     if (!existing) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -152,7 +153,7 @@ export async function DELETE(
 
     await prisma.auditLog.create({
       data: {
-        organizationId: orgId,
+        workspaceId: workspaceId,
         actorId: userId,
         action: 'lead.deleted',
         targetType: 'lead',

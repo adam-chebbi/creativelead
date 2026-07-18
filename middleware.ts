@@ -5,6 +5,8 @@ const SESSION_COOKIE = "cl_session";
 function isPublicRoute(pathname: string): boolean {
   return (
     pathname.startsWith("/sign-in") ||
+    pathname.startsWith("/api/auth/send-magic-link") ||
+    pathname.startsWith("/api/auth/verify-magic-link") ||
     pathname.startsWith("/api") ||
     pathname === "/_next" ||
     pathname.startsWith("/_next/") ||
@@ -16,6 +18,7 @@ export default function middleware(req: { url: string; cookies: { get: (name: st
   const { pathname } = new URL(req.url);
   const response = NextResponse.next();
 
+  // Security headers (keep existing)
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -25,7 +28,7 @@ export default function middleware(req: { url: string; cookies: { get: (name: st
   if (isPublicRoute(pathname)) return response;
 
   const session = req.cookies.get(SESSION_COOKIE);
-  if (!session || session.value !== process.env.ACCESS_CODE_HASH) {
+  if (!session || !session.value) {
     const signInUrl = new URL("/sign-in", req.url);
     signInUrl.searchParams.set("redirect_url", pathname);
     return NextResponse.redirect(signInUrl);

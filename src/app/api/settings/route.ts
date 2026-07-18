@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth';
 import type { Prisma } from '@prisma/client';
 
 const SECRET_FIELDS = [
@@ -28,14 +29,16 @@ function maskSecrets(settings: Record<string, unknown>): Record<string, unknown>
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const organizationId = searchParams.get('organizationId');
-    if (!organizationId) {
-      return NextResponse.json({ error: 'organizationId query param is required' }, { status: 400 });
+    let workspaceId: string;
+    try {
+      const auth = await requireAuth(req);
+      workspaceId = auth.workspaceId;
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const row = await prisma.organizationSettings.findUnique({
-      where: { organizationId },
+    const row = await prisma.workspaceSettings.findUnique({
+      where: { workspaceId },
     });
 
     if (!row) {
@@ -51,21 +54,28 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    let workspaceId: string;
+    try {
+      const auth = await requireAuth(req);
+      workspaceId = auth.workspaceId;
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await req.json();
-    const { organizationId, settings, updatedById } = body as {
-      organizationId: string;
+    const { settings, updatedById } = body as {
       settings: Record<string, unknown>;
       updatedById?: string;
     };
 
-    if (!organizationId || !settings) {
-      return NextResponse.json({ error: 'organizationId and settings are required' }, { status: 400 });
+    if (!settings) {
+      return NextResponse.json({ error: 'settings are required' }, { status: 400 });
     }
 
-    const row = await prisma.organizationSettings.upsert({
-      where: { organizationId },
+    const row = await prisma.workspaceSettings.upsert({
+      where: { workspaceId },
       update: { settings: settings as unknown as Prisma.InputJsonValue, updatedById: updatedById || null },
-      create: { organizationId, settings: settings as unknown as Prisma.InputJsonValue, updatedById: updatedById || null },
+      create: { workspaceId, settings: settings as unknown as Prisma.InputJsonValue, updatedById: updatedById || null },
     });
 
     return NextResponse.json({ ok: true, id: row.id });

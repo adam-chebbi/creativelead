@@ -1,138 +1,142 @@
 import { Campaign, CampaignLedgerEntry } from '../types';
+import { apiRequest } from './api-request';
+
+// ── IndexedDB read-only helpers (for one-time migration) ──────────────────
 
 const DB_NAME = 'CreativeLeadDB';
-// Must be >= the version in db.ts (currently 3). Bump here whenever stores are added.
 const DB_VERSION = 4;
 const CAMPAIGN_STORE = 'campaigns';
 const LEDGER_STORE = 'campaign_ledger';
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') return reject(new Error('IndexedDB not available'));
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
-    request.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result;
-
-      // ── Core stores (owned by db.ts — create if missing) ──────────────
-      if (!db.objectStoreNames.contains('leads')) {
-        db.createObjectStore('leads', { keyPath: 'google_maps_url' });
-      }
-      if (!db.objectStoreNames.contains('lead_notes')) {
-        const s = db.createObjectStore('lead_notes', { keyPath: 'id' });
-        s.createIndex('leadUrl', 'leadUrl', { unique: false });
-      }
-      if (!db.objectStoreNames.contains('lead_attachments')) {
-        const s = db.createObjectStore('lead_attachments', { keyPath: 'id' });
-        s.createIndex('leadUrl', 'leadUrl', { unique: false });
-      }
-      if (!db.objectStoreNames.contains('lead_followups')) {
-        const s = db.createObjectStore('lead_followups', { keyPath: 'id' });
-        s.createIndex('leadUrl', 'leadUrl', { unique: false });
-        s.createIndex('dueAt', 'dueAt', { unique: false });
-      }
-
-      // ── Campaign stores ────────────────────────────────────────────────
-      if (!db.objectStoreNames.contains(CAMPAIGN_STORE)) {
-        db.createObjectStore(CAMPAIGN_STORE, { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains(LEDGER_STORE)) {
-        const store = db.createObjectStore(LEDGER_STORE, { keyPath: 'id' });
-        store.createIndex('campaignId', 'campaignId', { unique: false });
-        store.createIndex('leadUrl', 'leadUrl', { unique: false });
-        store.createIndex('status', 'status', { unique: false });
-      }
-    };
+    request.onupgradeneeded = () => {};
   });
 }
 
-// Campaign CRUD
-export async function saveCampaign(campaign: Campaign): Promise<void> {
+export async function readAllCampaignsFromIndexedDB(): Promise<Campaign[]> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction([CAMPAIGN_STORE], 'readwrite');
-    tx.objectStore(CAMPAIGN_STORE).put(campaign);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    if (!db.objectStoreNames.contains(CAMPAIGN_STORE)) { resolve([]); db.close(); return; }
+    const req = db.transaction(CAMPAIGN_STORE, 'readonly').objectStore(CAMPAIGN_STORE).getAll();
+    req.onsuccess = () => { db.close(); resolve(req.result || []); };
+    req.onerror = () => reject(req.error);
   });
+}
+
+export async function readAllLedgerFromIndexedDB(): Promise<CampaignLedgerEntry[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    if (!db.objectStoreNames.contains(LEDGER_STORE)) { resolve([]); db.close(); return; }
+    const req = db.transaction(LEDGER_STORE, 'readonly').objectStore(LEDGER_STORE).getAll();
+    req.onsuccess = () => { db.close(); resolve(req.result || []); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ── Campaign CRUD (server-backed) ─────────────────────────────────────────
+
+export async function saveCampaign(campaign: Campaign): Promise<void> {
+  try {
+    await apiRequest('/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(campaign),
+    });
+  } catch { /* ignore */ }
 }
 
 export async function getCampaign(id: string): Promise<Campaign | undefined> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction(CAMPAIGN_STORE, 'readonly').objectStore(CAMPAIGN_STORE).get(id);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const res = await apiRequest(`/api/campaigns/${id}`);
+    if (!res.ok) return undefined;
+    const data = await res.json();
+    return serverCampaignToClient(data);
+  } catch {
+    return undefined;
+  }
 }
 
 export async function getAllCampaigns(): Promise<Campaign[]> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction(CAMPAIGN_STORE, 'readonly').objectStore(CAMPAIGN_STORE).getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const res = await apiRequest('/api/campaigns');
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data || []).map(serverCampaignToClient);
+  } catch {
+    return [];
+  }
 }
 
 export async function deleteCampaign(id: string): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction([CAMPAIGN_STORE], 'readwrite');
-    tx.objectStore(CAMPAIGN_STORE).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  try {
+    await apiRequest(`/api/campaigns/${id}`, { method: 'DELETE' });
+  } catch { /* ignore */ }
 }
 
-// Ledger CRUD
+// ── Ledger CRUD (server-backed) ───────────────────────────────────────────
+
 export async function saveLedgerEntry(entry: CampaignLedgerEntry): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction([LEDGER_STORE], 'readwrite');
-    tx.objectStore(LEDGER_STORE).put(entry);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  try {
+    await apiRequest(`/api/campaigns/${entry.campaignId}/ledger`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    });
+  } catch { /* ignore */ }
 }
 
 export async function saveLedgerEntries(entries: CampaignLedgerEntry[]): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction([LEDGER_STORE], 'readwrite');
-    const store = tx.objectStore(LEDGER_STORE);
-    for (const entry of entries) store.put(entry);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  for (const entry of entries) {
+    try {
+      await saveLedgerEntry(entry);
+    } catch { /* skip failed entries */ }
+  }
 }
 
 export async function getCampaignLedger(campaignId: string): Promise<CampaignLedgerEntry[]> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction(LEDGER_STORE, 'readonly')
-      .objectStore(LEDGER_STORE)
-      .index('campaignId')
-      .getAll(campaignId);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const res = await apiRequest(`/api/campaigns/${campaignId}/ledger`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data || []).map((e: Record<string, unknown>): CampaignLedgerEntry => ({
+      id: e.id as string,
+      campaignId: e.campaignId as string,
+      leadUrl: (e.leadUrl as string) || '',
+      stepIndex: (e.stepIndex as number) || 0,
+      channel: (e.channel as CampaignLedgerEntry['channel']) || 'email',
+      status: (e.status as CampaignLedgerEntry['status']) || 'pending',
+      sentAt: e.sentAt as string || undefined,
+      errorMessage: e.errorMessage as string || undefined,
+      nextScheduledAt: e.nextScheduledAt as string || undefined,
+      messageBody: e.body as string || undefined,
+      createdAt: e.createdAt as string,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function getPendingSends(): Promise<CampaignLedgerEntry[]> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction(LEDGER_STORE, 'readonly')
-      .objectStore(LEDGER_STORE)
-      .index('status')
-      .getAll('pending');
-    req.onsuccess = () => {
+  try {
+    const all = await getAllCampaigns();
+    const pending: CampaignLedgerEntry[] = [];
+    for (const c of all) {
+      const ledger = await getCampaignLedger(c.id);
       const now = Date.now();
-      const due = req.result.filter(e => !e.nextScheduledAt || new Date(e.nextScheduledAt).getTime() <= now);
-      resolve(due);
-    };
-    req.onerror = () => reject(req.error);
-  });
+      pending.push(...ledger.filter(e =>
+        e.status === 'pending' &&
+        (!e.nextScheduledAt || new Date(e.nextScheduledAt).getTime() <= now)
+      ));
+    }
+    return pending;
+  } catch {
+    return [];
+  }
 }
 
 export async function updateLedgerStatus(
@@ -140,19 +144,13 @@ export async function updateLedgerStatus(
   status: CampaignLedgerEntry['status'],
   extra?: Partial<CampaignLedgerEntry>
 ): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction([LEDGER_STORE], 'readwrite');
-    const store = tx.objectStore(LEDGER_STORE);
-    const getReq = store.get(entryId);
-    getReq.onsuccess = () => {
-      const existing = getReq.result;
-      if (!existing) { resolve(); return; }
-      store.put({ ...existing, ...extra, status });
-    };
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  try {
+    await apiRequest(`/api/campaigns/ledger/${entryId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, sentAt: extra?.sentAt, errorMessage: extra?.errorMessage, nextScheduledAt: extra?.nextScheduledAt }),
+    });
+  } catch { /* ignore */ }
 }
 
 export async function getTodayFollowUps(): Promise<CampaignLedgerEntry[]> {
@@ -180,4 +178,24 @@ export async function getCampaignStats(campaignId: string): Promise<{ sentCount:
 
 export function generateId(): string {
   return 'camp_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function serverCampaignToClient(c: Record<string, unknown>): Campaign {
+  return {
+    id: c.id as string,
+    name: c.name as string,
+    channel: (c.channel as Campaign['channel']) || 'email',
+    messageTemplate: (c.messageTemplate as string) || '',
+    subjectTemplate: c.subjectTemplate as string || undefined,
+    recipientLeadUrls: (c.recipientLeadUrls as string[]) || [],
+    scheduleType: (c.scheduleType as Campaign['scheduleType']) || 'immediate',
+    scheduledAt: c.scheduledAt as string || undefined,
+    followUpSteps: (c.followUpSteps as Campaign['followUpSteps']) || [],
+    status: (c.status as Campaign['status']) || 'draft',
+    createdAt: (c.createdAt as string) || new Date().toISOString(),
+    updatedAt: (c.updatedAt as string) || new Date().toISOString(),
+    stats: (c.stats as Campaign['stats']) || { sentCount: 0, failedCount: 0, replyCount: 0, leadsInCampaign: 0, followUpsCompleted: 0, followUpsTotal: 0 },
+  };
 }

@@ -1,0 +1,47 @@
+{
+    "manifest_version": 3,
+    "name": "LeadsCC Extractor",
+    "version": "1.0",
+    "description": "Extract leads from Google Maps and sync with LeadsCC.",
+    "permissions": [
+        "storage",
+        "activeTab",
+        "scripting",
+        "downloads",
+        "alarms",
+        "tabs"
+    ],
+    "host_permissions": [
+        "https://www.google.com/maps/*"
+    ],
+    "action": {
+        "default_popup": "popup/popup.html",
+        "default_icon": {
+            "16": "logo.png",
+            "48": "logo.png",
+            "128": "logo.png"
+        }
+    },
+    "background": {
+        "service_worker": "background/background.js"
+    },
+    "icons": {
+        "16": "logo.png",
+        "48": "logo.png",
+        "128": "logo.png"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://www.google.com/maps/*"
+            ],
+            "js": [
+                "content/utils.js",
+                "content/profile.js",
+                "content/reviews.js",
+                "content/main.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ]
+}

@@ -25,6 +25,19 @@ export const PipelinePage: React.FC = () => {
     updateLeadMutation.mutate({ id, data });
   }, [updateLeadMutation]);
 
+  const handleDeleteLead = useCallback(async (lead: Lead, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const serverId = lead._serverId || (lead.google_maps_url || '').replace('server:', '');
+    if (!serverId) return;
+    if (!window.confirm(`Delete "${lead.business_name}"? This cannot be undone.`)) return;
+    try {
+      await fetch(`/api/leads/${serverId}`, { method: 'DELETE' });
+      refetch();
+    } catch {
+      console.error('Failed to delete lead');
+    }
+  }, [refetch]);
+
   const reloadFollowUps = useCallback(async () => {
     const all = await getAllFollowUps();
     setFollowUps(all);
@@ -236,7 +249,17 @@ export const PipelinePage: React.FC = () => {
                         >
                           <div className="kanban-card-header">
                             <span className="kanban-card-name">{lead.business_name}</span>
-                            {hasOverdue && <span className="kanban-card-overdue-badge">{overdueFu.length}</span>}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', flexShrink: 0 }}>
+                              {hasOverdue && <span className="kanban-card-overdue-badge">{overdueFu.length}</span>}
+                              <button
+                                className="kanban-card-delete-btn"
+                                onClick={(e) => handleDeleteLead(lead, e)}
+                                title="Delete lead"
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', color: 'var(--color-text-muted)', padding: '0.1rem 0.2rem', lineHeight: 1, borderRadius: '4px', opacity: 0, transition: 'opacity 0.1s' }}
+                                onMouseEnter={e => (e.target as HTMLElement).style.opacity = '1'}
+                                onMouseLeave={e => (e.target as HTMLElement).style.opacity = '0'}
+                              >🗑</button>
+                            </div>
                           </div>
                           <div className="kanban-card-meta">
                             {lead.category && <span className="kanban-card-cat">{lead.category}</span>}

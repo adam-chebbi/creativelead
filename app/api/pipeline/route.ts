@@ -4,11 +4,11 @@ import { prisma } from '@/lib/prisma';
 import { recalculateAll, runBulkPipeline } from '@/utils/pipeline-orchestrator';
 
 export async function POST(req: Request) {
-  let userId, orgId;
+  let userId, workspaceId;
   try {
     const authContext = await requireAuth(req);
     userId = authContext.userId;
-    orgId = authContext.orgId;
+    workspaceId = authContext.workspaceId;
   } catch {
     return new NextResponse('Unauthorized', { status: 401 });
   }
@@ -18,11 +18,11 @@ export async function POST(req: Request) {
     const { leadIds } = body;
 
     if (leadIds && Array.isArray(leadIds)) {
-      const result = await runBulkPipeline(leadIds, orgId);
+      const result = await runBulkPipeline(leadIds, workspaceId);
       return NextResponse.json(result);
     }
 
-    const result = await recalculateAll(orgId);
+    const result = await recalculateAll(workspaceId);
     return NextResponse.json(result);
   } catch (error) {
     console.error('[PIPELINE_POST]', error);
@@ -31,11 +31,11 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
-  let userId, orgId;
+  let userId, workspaceId;
   try {
     const authContext = await requireAuth(req);
     userId = authContext.userId;
-    orgId = authContext.orgId;
+    workspaceId = authContext.workspaceId;
   } catch {
     return new NextResponse('Unauthorized', { status: 401 });
   }
@@ -44,7 +44,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const leadId = url.searchParams.get('leadId');
 
-    const where: any = { lead: { organizationId: orgId } };
+    const where: any = { lead: { workspaceId: workspaceId } };
     if (leadId) where.leadId = leadId;
 
     const jobs = await prisma.backgroundJob.findMany({

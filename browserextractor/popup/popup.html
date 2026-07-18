@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Creative Lead Extractor</title>
+    <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+    <div class="container">
+
+        <!-- Header with real logo -->
+        <div class="header">
+            <img src="../logo.png" alt="Creative Lead" class="logo" />
+            <h1>Creative Lead</h1>
+        </div>
+
+        <!-- Auth Token -->
+        <div class="section auth-section">
+            <label for="authToken">API Token (optional)</label>
+            <input type="password" id="authToken" placeholder="Paste token for cloud sync" autocomplete="off" />
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span id="authStatus" class="message-area" style="text-align:left;"></span>
+                <button id="saveToken">Save</button>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Extraction Controls -->
+        <div class="section control-section">
+            <div class="control-group">
+                <label for="searchQuery">Search Query</label>
+                <input type="text" id="searchQuery" placeholder="e.g. Plumbers" style="width:100%; margin-bottom: 8px;" />
+            </div>
+            <div class="control-group">
+                <label for="searchLocation">Location or Coords</label>
+                <input type="text" id="searchLocation" placeholder="e.g. New York OR 40.71,-74.00" style="width:100%; margin-bottom: 8px;" />
+            </div>
+            <div class="control-group">
+                <label for="limitInput">Limit</label>
+                <input type="number" id="limitInput" min="1" max="100" value="20" style="width:70px;" />
+                <span style="font-size:11px; color:#606080;">/ 100 max</span>
+            </div>
+
+            <!-- Live Status -->
+            <div class="status-display">
+                <div class="status-item">
+                    <span class="label">Status</span>
+                    <span id="extractionStatus" class="value">Idle</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">Extracted</span>
+                    <span id="extractedCount" class="value">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">Current</span>
+                    <span id="currentBusiness" class="value text-truncate">—</span>
+                </div>
+            </div>
+
+            <!-- Start / Stop -->
+            <div class="buttons" style="margin-bottom:8px;">
+                <button id="startBtn" class="primary">▶ Start</button>
+                <button id="stopBtn" class="danger">■ Stop</button>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Export -->
+        <div class="section export-section">
+            <div class="buttons">
+                <button id="exportBtn" class="secondary">↓ Export Local Leads</button>
+            </div>
+        </div>
+
+        <div id="messageArea" class="message-area"></div>
+
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html>

@@ -7,17 +7,17 @@ export async function POST(
   req: Request,
   { params }: { params: { id: string } },
 ) {
-  let userId, orgId;
+  let userId, workspaceId;
   try {
     const authContext = await requireAuth(req);
     userId = authContext.userId;
-    orgId = authContext.orgId;
+    workspaceId = authContext.workspaceId;
   } catch {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
   try {
-    const result = await analyzeOpportunity(params.id, orgId);
+    const result = await analyzeOpportunity(params.id, workspaceId);
     if (!result.ok) {
       return NextResponse.json({ error: result.error || 'Analysis failed' }, { status: 400 });
     }

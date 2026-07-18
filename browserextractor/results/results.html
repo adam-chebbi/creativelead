@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CreativeLead - Extraction Results</title>
+    <link rel="stylesheet" href="results.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="topbar">
+        <div class="brand">
+            <img src="../logo-horizontal.png" alt="CreativeLead" class="logo" onerror="this.src='../logo.png'" />
+            <span class="title">Extraction Results</span>
+        </div>
+        <div class="actions">
+            <button id="exportJsonBtn" class="btn primary">Download JSON</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="summary">
+            <h2>Successfully Extracted <span id="leadCount">0</span> Leads</h2>
+            <p>Review your data below before exporting.</p>
+        </div>
+
+        <div class="table-wrapper">
+            <table id="resultsTable">
+                <thead>
+                    <tr>
+                        <th>Business Name</th>
+                        <th>Category</th>
+                        <th>Rating</th>
+                        <th>Reviews</th>
+                        <th>Phone</th>
+                        <th>Location</th>
+                        <th>Website</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Rows injected here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="results.js"></script>
+</body>
+</html>

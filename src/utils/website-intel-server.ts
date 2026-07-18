@@ -540,11 +540,11 @@ function formatBytes(bytes: number): string {
 
 export async function analyzeWebsiteServer(
   leadId: string,
-  orgId: string,
+  workspaceId: string,
   forceRefresh = false,
 ): Promise<{ ok: boolean; error?: string }> {
   const lead = await prisma.lead.findFirst({
-    where: { id: leadId, organizationId: orgId },
+    where: { id: leadId, workspaceId: workspaceId },
   });
 
   if (!lead) return { ok: false, error: 'Lead not found' };
@@ -624,13 +624,13 @@ export async function analyzeWebsiteServer(
   });
 
   try {
-    await scoreLeadById(leadId, orgId);
+    await scoreLeadById(leadId, workspaceId);
   } catch (err) {
     console.error(`[website-intel] rescore failed for ${leadId}:`, err);
   }
 
   try {
-    await analyzeOpportunity(leadId, orgId);
+    await analyzeOpportunity(leadId, workspaceId);
   } catch (err) {
     console.error(`[website-intel] opportunity analysis failed for ${leadId}:`, err);
   }
@@ -638,9 +638,9 @@ export async function analyzeWebsiteServer(
   return { ok: true };
 }
 
-export async function queueWebsiteIntel(leadId: string, orgId: string): Promise<void> {
+export async function queueWebsiteIntel(leadId: string, workspaceId: string): Promise<void> {
   try {
-    await analyzeWebsiteServer(leadId, orgId);
+    await analyzeWebsiteServer(leadId, workspaceId);
   } catch (err) {
     console.error(`[website-intel] queued analysis failed for ${leadId}:`, err);
   }

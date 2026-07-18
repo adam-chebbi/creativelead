@@ -128,10 +128,15 @@ export const SettingsPage: React.FC = () => {
     if (!googleSheetsUrl) { setSheetsResult({ ok: false, message: 'Enter a Web App URL first.' }); return; }
     setSheetsTesting(true); setSheetsResult(null);
     try {
-      const res = await fetch(googleSheetsUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ test: true }) });
-      if (res.ok) setSheetsResult({ ok: true, message: '✓ Connection successful — Web App is reachable.' });
-      else setSheetsResult({ ok: false, message: `× Server returned ${res.status}. Check your URL and script deployment.` });
-    } catch { setSheetsResult({ ok: false, message: '× Could not reach the URL. Check the URL or network/firewall settings.' }); }
+      const res = await fetch('/api/integrations/test-sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sheetUrl: googleSheetsUrl }),
+      });
+      const json = await res.json();
+      if (json.ok || (json.message && json.message.includes('successful'))) setSheetsResult({ ok: true, message: '✓ Connection successful — Web App is reachable.' });
+      else setSheetsResult({ ok: false, message: `× ${json.error || 'Connection failed.'}` });
+    } catch { setSheetsResult({ ok: false, message: '× Connection test request failed.' }); }
     finally { setSheetsTesting(false); }
   };
 
@@ -139,7 +144,7 @@ export const SettingsPage: React.FC = () => {
     if (!googleSheetsUrl) { setSheetsResult({ ok: false, message: 'Enter a Web App URL first.' }); return; }
     setSheetsSyncing(true); setSheetsResult(null);
     try {
-      const res = await fetch('/api/leads/sync-sheets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      const res = await fetch('/api/leads/sync-sheets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sheetUrl: googleSheetsUrl }) });
       const json = await res.json();
       if (json.ok) setSheetsResult({ ok: true, message: `✓ Synced ${json.synced} lead(s) to Google Sheets.` });
       else setSheetsResult({ ok: false, message: `× ${json.error || 'Sync failed.'}` });

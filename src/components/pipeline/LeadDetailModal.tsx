@@ -867,7 +867,20 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({ lead, onClose,
                 </span>
               )}
             </div>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={async () => {
+                  if (!window.confirm(`Permanently delete "${lead.business_name}"? This cannot be undone.`)) return;
+                  const serverId = lead._serverId || (lead.google_maps_url || '').replace('server:', '');
+                  if (!serverId) return;
+                  try {
+                    await apiRequest(`/api/leads/${serverId}`, { method: 'DELETE' });
+                  } catch {}
+                  onClose();
+                }}
+              >Delete Lead</Button>
               <Button variant="ghost" onClick={onClose}>Cancel</Button>
               {activeTab === 'edit' && <Button variant="primary" onClick={handleSubmit}>Save Changes</Button>}
             </div>

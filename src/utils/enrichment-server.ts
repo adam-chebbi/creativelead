@@ -365,13 +365,13 @@ CRITICAL: If the provided data is insufficient to estimate a field confidently, 
 
 export async function enrichLead(
   leadId: string,
-  orgId: string,
+  workspaceId: string,
   aiConfig?: AiEnrichmentConfig,
   enrichmentApiConfig?: EnrichmentApiConfig,
   force = false,
 ): Promise<{ ok: boolean; error?: string }> {
   const lead = await prisma.lead.findFirst({
-    where: { id: leadId, organizationId: orgId },
+    where: { id: leadId, workspaceId: workspaceId },
   });
 
   if (!lead) return { ok: false, error: 'Lead not found' };
@@ -629,12 +629,12 @@ export async function enrichLead(
 
     // Trigger rescoring + opportunity analysis after enrichment
     try {
-      await scoreLeadById(leadId, orgId);
+      await scoreLeadById(leadId, workspaceId);
     } catch (err) {
       console.error(`[enrichment] rescore failed for ${leadId}:`, err);
     }
     try {
-      await analyzeOpportunity(leadId, orgId);
+      await analyzeOpportunity(leadId, workspaceId);
     } catch (err) {
       console.error(`[enrichment] opportunity analysis failed for ${leadId}:`, err);
     }
@@ -753,9 +753,9 @@ async function saveEnrichmentResult(
   });
 }
 
-export async function queueEnrichment(leadId: string, orgId: string): Promise<void> {
+export async function queueEnrichment(leadId: string, workspaceId: string): Promise<void> {
   try {
-    await enrichLead(leadId, orgId);
+    await enrichLead(leadId, workspaceId);
   } catch (err) {
     console.error(`[enrichment] queued enrichment failed for ${leadId}:`, err);
   }

@@ -3,9 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from '@/lib/auth';
 import { rateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
-import { scoreLeadById, generateImportReport } from '@/utils/score-lead-server';
-import { queueWebsiteIntel } from '@/utils/website-intel-server';
-import { queueEnrichment } from '@/utils/enrichment-server';
+import { generateImportReport } from '@/utils/score-lead-server';
+import { enqueueJob } from '@/lib/queue';
+import { incrementCounter } from '@/lib/quota';
 
 const leadSchema = z.object({
   business_name: z.string(),
@@ -22,11 +22,11 @@ const leadSchema = z.object({
 const bulkImportSchema = z.array(leadSchema).max(500, 'Maximum 500 leads per import');
 
 export async function POST(req: Request) {
-  let userId, orgId;
+  let userId, workspaceId;
   try {
     const authContext = await requireAuth(req);
     userId = authContext.userId;
-    orgId = authContext.orgId;
+    workspaceId = authContext.workspaceId;
   } catch (err) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       leads.map((lead) =>
         prisma.lead.create({
           data: {
-            organizationId: orgId,
+            workspaceId: workspaceId,
             createdById: userId,
             businessName: lead.business_name,
             category: lead.category,
@@ -87,35 +87,23 @@ export async function POST(req: Request) {
       .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
       .map((r) => r.value);
 
-    (async () => {
-      const BG_CONCURRENCY = 5;
-      for (let i = 0; i < fulfilledLeads.length; i += BG_CONCURRENCY) {
-        const batch = fulfilledLeads.slice(i, i + BG_CONCURRENCY);
-        await Promise.allSettled(
-          batch.map(async (lead) => {
-            try {
-              await scoreLeadById(lead.id, orgId);
-            } catch (err) {
-              console.error(`[BULK_IMPORT] scoring failed for lead ${lead.id}:`, err);
-            }
-            if (lead.website) {
-              await Promise.all([
-                queueWebsiteIntel(lead.id, orgId).catch((err) =>
-                  console.error(`[BULK_IMPORT] website intel failed for ${lead.id}:`, err)
-                ),
-                queueEnrichment(lead.id, orgId).catch((err) =>
-                  console.error(`[BULK_IMPORT] enrichment failed for ${lead.id}:`, err)
-                ),
-              ]);
-            }
-          })
+    fulfilledLeads.forEach((lead) => {
+      enqueueJob(lead.id, 'scoring').catch((err) =>
+        console.error(`[BULK_IMPORT] enqueue scoring failed for ${lead.id}:`, err)
+      );
+      if (lead.website) {
+        enqueueJob(lead.id, 'website-intelligence').catch((err) =>
+          console.error(`[BULK_IMPORT] enqueue website-intel failed for ${lead.id}:`, err)
+        );
+        enqueueJob(lead.id, 'enrichment').catch((err) =>
+          console.error(`[BULK_IMPORT] enqueue enrichment failed for ${lead.id}:`, err)
         );
       }
-    })();
+    });
 
     await prisma.auditLog.create({
       data: {
-        organizationId: orgId,
+        workspaceId: workspaceId,
         actorId: userId,
         action: 'leads.bulk_import',
         metadata: {
@@ -131,6 +119,7 @@ export async function POST(req: Request) {
       },
     });
 
+    incrementCounter(workspaceId, 'leads_ingested', successful).catch(() => {});
     return NextResponse.json({ success: true, count: successful });
   } catch (error) {
     console.error('[LEADS_BULK_IMPORT]', error);

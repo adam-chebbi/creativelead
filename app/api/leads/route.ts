@@ -3,11 +3,11 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 
 export async function GET(req: Request) {
-  let userId, orgId;
+  let userId, workspaceId;
   try {
     const authContext = await requireAuth(req);
     userId = authContext.userId;
-    orgId = authContext.orgId;
+    workspaceId = authContext.workspaceId;
   } catch (err) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
@@ -20,7 +20,7 @@ export async function GET(req: Request) {
 
     const leads = await prisma.lead.findMany({
       where: {
-        organizationId: orgId,
+        workspaceId: workspaceId,
         ...(stage ? { pipelineStage: stage } : {}),
         ...(owner ? { ownerId: owner } : {}),
         ...(q ? {

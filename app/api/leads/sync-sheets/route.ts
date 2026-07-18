@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getSecret } from '@/lib/secrets';
+import { incrementCounter } from '@/lib/quota';
 
 const SHEET_COLUMNS = [
   'Company', 'Website', 'Email', 'Phone', 'LinkedIn', 'Facebook',
@@ -43,11 +44,11 @@ function mapLeadToRow(lead: any, enrichment: any, opportunity: any): Record<stri
 }
 
 export async function POST(req: Request) {
-  let userId, orgId;
+  let userId, workspaceId;
   try {
     const authContext = await requireAuth(req);
     userId = authContext.userId;
-    orgId = authContext.orgId;
+    workspaceId = authContext.workspaceId;
   } catch {
     return new NextResponse('Unauthorized', { status: 401 });
   }
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { leadId, sheetUrl: clientSheetUrl } = body;
 
-    const sheetUrl = clientSheetUrl || await getSecret(`org/${orgId}/google-sheets` as any);
+    const sheetUrl = clientSheetUrl || await getSecret(`org/${workspaceId}/google-sheets` as any);
     if (!sheetUrl) {
       return NextResponse.json({ error: 'Google Sheets Web App URL not configured. Go to Settings > Google Sheets Integration.' }, { status: 400 });
     }
@@ -64,14 +65,14 @@ export async function POST(req: Request) {
     let leads;
     if (leadId) {
       const lead = await prisma.lead.findFirst({
-        where: { id: leadId, organizationId: orgId },
+        where: { id: leadId, workspaceId: workspaceId },
         include: { enrichment: true, opportunity: true },
       });
       if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
       leads = [lead];
     } else {
       leads = await prisma.lead.findMany({
-        where: { organizationId: orgId },
+        where: { workspaceId: workspaceId },
         include: { enrichment: true, opportunity: true },
       });
     }
@@ -90,6 +91,7 @@ export async function POST(req: Request) {
     }
 
     const result = await response.json();
+    incrementCounter(workspaceId, 'crm_exports', rows.length).catch(() => {});
     return NextResponse.json({ ok: true, synced: rows.length, result });
   } catch (error) {
     console.error('[SYNC_SHEETS]', error);

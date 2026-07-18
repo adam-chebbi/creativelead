@@ -5,11 +5,39 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 
+interface WorkspaceInfo {
+  id: string;
+  name: string;
+  role: string;
+}
+
+interface UserInfo {
+  email: string;
+  workspaces: WorkspaceInfo[];
+  activeWorkspaceId: string;
+}
+
 export const Navbar: React.FC = () => {
   const pathname = usePathname();
   const router = useRouter();
   const [showMenu, setShowMenu] = useState(false);
+  const [user, setUser] = useState<UserInfo | null>(null);
   const menuRef = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then(r => r.json())
+      .then(data => {
+        if (data.authenticated) {
+          setUser({
+            email: data.user.email,
+            workspaces: data.workspaces,
+            activeWorkspaceId: data.activeWorkspaceId,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -24,11 +52,22 @@ export const Navbar: React.FC = () => {
   const handleSignOut = async () => {
     try {
       await fetch("/api/auth/sign-out", { method: "POST" });
-    } catch {
-      // Best-effort sign-out — proceed even if the server call fails
-    }
+    } catch {}
     router.push("/sign-in");
   };
+
+  const handleSwitchWorkspace = async (workspaceId: string) => {
+    // Get current session ID from cookie — we need a small helper
+    try {
+      const res = await fetch("/api/auth/me");
+      const data = await res.json();
+      // We'll just redirect and let the next page load handle it
+    } catch {}
+    router.refresh();
+  };
+
+  const activeWs = user?.workspaces.find(w => w.id === user.activeWorkspaceId);
+  const initial = user?.email?.charAt(0).toUpperCase() || "U";
 
   return (
     <header className="navbar">
@@ -100,7 +139,7 @@ export const Navbar: React.FC = () => {
                 fontWeight: 600,
               }}
             >
-              U
+              {initial}
             </div>
           </button>
           {showMenu && (
@@ -114,14 +153,36 @@ export const Navbar: React.FC = () => {
                 border: "1px solid #2a2a4a",
                 borderRadius: 8,
                 padding: "4px 0",
-                minWidth: 140,
+                minWidth: 200,
                 zIndex: 1000,
                 boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
               }}
             >
-              <div style={{ padding: "8px 12px", borderBottom: "1px solid #2a2a4a", fontSize: 13, color: "#a0a0c0" }}>
-                Authenticated
-              </div>
+              {user && (
+                <>
+                  <div style={{ padding: "8px 12px", borderBottom: "1px solid #2a2a4a", fontSize: 13, color: "#a0a0c0" }}>
+                    {user.email}
+                  </div>
+                  {user.workspaces.length > 1 && (
+                    <div style={{ padding: "8px 12px", borderBottom: "1px solid #2a2a4a", fontSize: 12 }}>
+                      <div style={{ color: "#a0a0c0", marginBottom: 4 }}>Workspaces:</div>
+                      {user.workspaces.map(ws => (
+                        <div
+                          key={ws.id}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 4, padding: "2px 0",
+                            color: ws.id === user.activeWorkspaceId ? "#8b5cf6" : "#e0e0f0",
+                            fontWeight: ws.id === user.activeWorkspaceId ? 600 : 400,
+                          }}
+                        >
+                          {ws.name} {ws.id === user.activeWorkspaceId ? "(active)" : ""}
+                          <span style={{ fontSize: 10, color: "#a0a0c0", marginLeft: "auto" }}>{ws.role}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
               <button
                 onClick={handleSignOut}
                 style={{

@@ -1,0 +1,237 @@
+/* Creative Lead Extension Popup — Dark theme matching brand palette */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    width: 340px;
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0a0a14;
+    color: #f0f0ff;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #111120; }
+::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #8b5cf6; }
+
+/* Container */
+.container {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Header */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #1e1e38;
+}
+
+.logo {
+    width: 28px;
+    height: 28px;
+}
+
+h1 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #f0f0ff;
+    letter-spacing: -0.02em;
+}
+
+/* Section */
+.section {
+    background: #111120;
+    border: 1px solid #1e1e38;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.auth-section {}
+
+.export-section {}
+
+/* Labels */
+label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #606080;
+    margin-bottom: 5px;
+}
+
+/* Inputs */
+input, select {
+    width: 100%;
+    padding: 7px 10px;
+    background: #16162a;
+    color: #f0f0ff;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+    margin-bottom: 8px;
+}
+
+input:focus, select:focus {
+    border-color: #8b5cf6;
+}
+
+select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23606080' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+}
+
+/* Status */
+#authStatus {
+    font-size: 11px;
+    display: block;
+    margin-top: 4px;
+}
+
+/* Status display */
+.status-display {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #a0a0c0;
+}
+
+.label { color: #606080; font-size: 11px; }
+.value { font-weight: 600; color: #f0f0ff; font-size: 12px; }
+
+.text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 160px;
+    direction: rtl;
+    text-align: left;
+}
+
+/* Divider */
+.divider {
+    height: 1px;
+    background: #1e1e38;
+    margin: 2px 0;
+}
+
+/* Buttons */
+.buttons {
+    display: flex;
+    gap: 6px;
+}
+
+button {
+    padding: 7px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    flex: 1;
+}
+
+.primary {
+    background: #8b5cf6;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(139,92,246,0.35);
+}
+
+.primary:hover {
+    background: #7c3aed;
+    box-shadow: 0 4px 14px rgba(139,92,246,0.5);
+}
+
+.secondary {
+    background: #1c1c36;
+    color: #a78bfa;
+    border: 1px solid rgba(139,92,246,0.25);
+}
+
+.secondary:hover {
+    background: #221e3a;
+    border-color: #8b5cf6;
+}
+
+.danger {
+    background: rgba(239,68,68,0.1);
+    color: #f87171;
+    border: 1px solid rgba(239,68,68,0.2);
+}
+
+.danger:hover {
+    background: rgba(239,68,68,0.18);
+}
+
+button#saveToken {
+    background: #1c1c36;
+    color: #a0a0c0;
+    border: 1px solid #2a2a4a;
+    flex: none;
+    width: auto;
+    padding: 7px 14px;
+}
+
+button#saveToken:hover {
+    background: #221e3a;
+    color: #f0f0ff;
+    border-color: #8b5cf6;
+}
+
+/* Control group */
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.control-group label {
+    margin: 0;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.control-group input,
+.control-group select {
+    margin-bottom: 0;
+}
+
+/* Message area */
+.message-area {
+    font-size: 11px;
+    color: #606080;
+    text-align: center;
+    min-height: 14px;
+    padding: 2px 0;
+}

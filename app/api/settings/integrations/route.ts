@@ -9,7 +9,7 @@ const INTEGRATION_KEYS = ['ai/openai', 'ai/gemini', 'smtp', 'twilio', 'google-sh
 type IntegrationSlug = typeof INTEGRATION_KEYS[number];
 
 export async function GET(req: Request) {
-  let caller: { userId: string; orgId: string };
+  let caller: { userId: string; workspaceId: string };
   try {
     caller = await requireAuth(req);
   } catch (err) {
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   try {
     const statuses = await Promise.all(
       INTEGRATION_KEYS.map(async (slug) => {
-        const key: SecretKey = `org/${caller.orgId}/${slug}`;
+        const key: SecretKey = `org/${caller.workspaceId}/${slug}`;
         const value = await getSecret(key);
         return {
           slug,
@@ -44,9 +44,9 @@ const integrationUpdateSchema = z.object({
 }).strict();
 
 export async function POST(req: Request) {
-  let caller: { userId: string; orgId: string };
+  let caller: { userId: string; workspaceId: string };
   try {
-    caller = requireRole('org:admin');
+    caller = await requireRole(req, ['owner']);
   } catch (response) {
     return response as NextResponse;
   }
@@ -55,12 +55,12 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { slug, value } = integrationUpdateSchema.parse(body);
 
-    const key: SecretKey = `org/${caller.orgId}/${slug}`;
+    const key: SecretKey = `org/${caller.workspaceId}/${slug}`;
     await setSecret(key, value);
 
     await prisma.auditLog.create({
       data: {
-        organizationId: caller.orgId,
+        workspaceId: caller.workspaceId,
         actorId: caller.userId,
         action: 'settings.integration_updated',
         targetType: 'integration',

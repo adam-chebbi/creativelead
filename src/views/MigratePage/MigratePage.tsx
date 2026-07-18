@@ -1,115 +1,126 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { fadeInUp, staggerContainer, defaultTransition } from '@/animations';
 import { apiRequest } from '@/utils/api-request';
+import { readAllLeadsFromIndexedDB, readAllNotesFromIndexedDB, readAllAttachmentsFromIndexedDB, readAllFollowUpsFromIndexedDB } from '@/db';
+import { readAllCampaignsFromIndexedDB, readAllLedgerFromIndexedDB } from '@/utils/campaign-db';
 
-interface BatchResult {
-  batchIndex: number;
-  sent: number;
-  imported: number;
+const MIGRATED_KEY = 'cl_migrated_v2';
+const BATCH_SIZE = 200;
+
+interface PhaseResult {
+  phase: string;
+  count: number;
   error?: string;
 }
 
-interface MigrationSummary {
-  totalLeads: number;
-  totalImported: number;
-  batches: BatchResult[];
-  completedAt: string;
-}
-
-const BATCH_SIZE = 200;
-const DB_NAME = 'CreativeLeadDB';
-const STORE_NAME = 'leads';
-
-async function readAllFromIndexedDB(): Promise<unknown[]> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME);
-    request.onerror = () => reject(new Error('Could not open IndexedDB database. It may not exist in this browser.'));
-    request.onsuccess = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.close();
-        resolve([]);
-        return;
-      }
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const getAllRequest = store.getAll();
-      getAllRequest.onsuccess = () => {
-        db.close();
-        resolve(getAllRequest.result ?? []);
-      };
-      getAllRequest.onerror = () => reject(new Error('Failed to read from IndexedDB.'));
-    };
-  });
-}
-
 export const MigratePage: React.FC = () => {
+  const [hasMigrated, setHasMigrated] = useState(false);
   const [status, setStatus] = useState<'idle' | 'reading' | 'migrating' | 'done' | 'error'>('idle');
+  const [phase, setPhase] = useState('');
   const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [summary, setSummary] = useState<MigrationSummary | null>(null);
+  const [results, setResults] = useState<PhaseResult[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setHasMigrated(localStorage.getItem(MIGRATED_KEY) === 'true');
+  }, []);
 
   const handleMigrate = async () => {
     setStatus('reading');
     setErrorMessage(null);
-    setSummary(null);
+    setResults([]);
 
-    let allLeads: unknown[] = [];
+    let leads: unknown[] = [];
+    let notes: unknown[] = [];
+    let attachments: unknown[] = [];
+    let followUps: unknown[] = [];
+    let campaigns: unknown[] = [];
+    let ledgerEntries: unknown[] = [];
+
     try {
-      allLeads = await readAllFromIndexedDB();
+      setPhase('Reading IndexedDB…');
+      [leads, notes, attachments, followUps, campaigns, ledgerEntries] = await Promise.all([
+        readAllLeadsFromIndexedDB(),
+        readAllNotesFromIndexedDB(),
+        readAllAttachmentsFromIndexedDB(),
+        readAllFollowUpsFromIndexedDB(),
+        readAllCampaignsFromIndexedDB(),
+        readAllLedgerFromIndexedDB(),
+      ]);
     } catch (e) {
       setStatus('error');
       setErrorMessage(e instanceof Error ? e.message : 'Failed to read IndexedDB.');
       return;
     }
 
-    if (allLeads.length === 0) {
+    if (leads.length === 0 && notes.length === 0 && followUps.length === 0 && campaigns.length === 0) {
       setStatus('done');
-      setSummary({ totalLeads: 0, totalImported: 0, batches: [], completedAt: new Date().toISOString() });
+      setResults([{ phase: 'checked', count: 0 }]);
       return;
     }
 
     setStatus('migrating');
-    setProgress({ current: 0, total: allLeads.length });
+    const allResults: PhaseResult[] = [];
 
-    const batches: BatchResult[] = [];
-    let totalImported = 0;
-
-    for (let i = 0; i < allLeads.length; i += BATCH_SIZE) {
-      const batch = allLeads.slice(i, i + BATCH_SIZE);
-      const batchIndex = Math.floor(i / BATCH_SIZE);
-
-      try {
-        const res = await apiRequest('/api/migrate/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(batch),
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(text || `Server error ${res.status}`);
+    // Phase 1: Import leads
+    if (leads.length > 0) {
+      setPhase('Importing leads…');
+      setProgress({ current: 0, total: leads.length });
+      let imported = 0;
+      for (let i = 0; i < leads.length; i += BATCH_SIZE) {
+        const batch = leads.slice(i, i + BATCH_SIZE);
+        try {
+          const res = await apiRequest('/api/migrate/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(batch),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            imported += data.count ?? 0;
+          }
+        } catch {
+          // ignore batch errors
         }
-
-        const data = await res.json();
-        const result: BatchResult = { batchIndex, sent: batch.length, imported: data.count ?? 0 };
-        batches.push(result);
-        totalImported += result.imported;
-      } catch (e) {
-        batches.push({ batchIndex, sent: batch.length, imported: 0, error: e instanceof Error ? e.message : 'Unknown error' });
+        setProgress({ current: Math.min(i + BATCH_SIZE, leads.length), total: leads.length });
       }
-
-      setProgress({ current: Math.min(i + BATCH_SIZE, allLeads.length), total: allLeads.length });
+      allResults.push({ phase: 'leads', count: imported });
     }
 
+    // Phase 2: Import entities (notes, attachments, follow-ups, campaigns, ledger)
+    if (notes.length > 0 || attachments.length > 0 || followUps.length > 0 || campaigns.length > 0 || ledgerEntries.length > 0) {
+      setPhase('Importing notes, attachments, follow-ups, campaigns…');
+      try {
+        const res = await apiRequest('/api/migrate/import-entities', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notes, attachments, followUps, campaigns, ledgerEntries }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.counts) {
+            for (const [key, val] of Object.entries(data.counts)) {
+              allResults.push({ phase: key, count: val as number });
+            }
+          }
+        } else {
+          allResults.push({ phase: 'entities', count: 0, error: 'Import failed' });
+        }
+      } catch {
+        allResults.push({ phase: 'entities', count: 0, error: 'Network error' });
+      }
+    }
+
+    localStorage.setItem(MIGRATED_KEY, 'true');
+    setHasMigrated(true);
     setStatus('done');
-    setSummary({ totalLeads: allLeads.length, totalImported, batches, completedAt: new Date().toISOString() });
+    setResults(allResults);
   };
 
-  const progressPercent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+  const totalImported = results.reduce((s, r) => s + r.count, 0);
 
   return (
     <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={defaultTransition}>
@@ -126,7 +137,7 @@ export const MigratePage: React.FC = () => {
             <span>to the shared database</span>
           </motion.h1>
           <motion.p variants={fadeInUp} className="hero-subtitle">
-            This reads your browser's existing local lead data (IndexedDB) and uploads it
+            This reads your browser's existing local data (IndexedDB) and uploads it
             to the shared Postgres database. Run this once per browser that has local data.
           </motion.p>
         </motion.div>
@@ -134,18 +145,30 @@ export const MigratePage: React.FC = () => {
 
       <div className="page-content">
         <div className="section">
+          {hasMigrated && (
+            <div className="alert alert-success" style={{ marginBottom: '1rem' }}>
+              Migration complete — all data now served from Postgres.
+            </div>
+          )}
+
           {status === 'idle' && (
             <motion.div variants={fadeInUp} initial="hidden" animate="visible" className="section-header">
-              <h2 className="section-title">Ready to migrate</h2>
-              <p className="section-subtitle">Click the button below to begin. Do not close this tab during migration.</p>
-              <button
-                id="start-migration-btn"
-                className="btn btn-primary btn-lg"
-                style={{ marginTop: '1.5rem' }}
-                onClick={handleMigrate}
-              >
-                Start Migration
-              </button>
+              <h2 className="section-title">{hasMigrated ? 'Already migrated' : 'Ready to migrate'}</h2>
+              <p className="section-subtitle">
+                {hasMigrated
+                  ? 'Your data has already been migrated. The app now reads from the shared database.'
+                  : 'Click the button below to begin. Do not close this tab during migration.'}
+              </p>
+              {!hasMigrated && (
+                <button
+                  id="start-migration-btn"
+                  className="btn btn-primary btn-lg"
+                  style={{ marginTop: '1.5rem' }}
+                  onClick={handleMigrate}
+                >
+                  Start Migration
+                </button>
+              )}
             </motion.div>
           )}
 
@@ -158,17 +181,21 @@ export const MigratePage: React.FC = () => {
           {status === 'migrating' && (
             <div style={{ padding: '2rem' }}>
               <h2 className="section-title" style={{ marginBottom: '1rem' }}>
-                Migrating {progress.current} / {progress.total} leads…
+                {phase} {progress.total > 0 ? `(${progress.current}/${progress.total})` : ''}
               </h2>
-              <div style={{ background: 'var(--bg-secondary)', borderRadius: '9999px', height: '12px', overflow: 'hidden' }}>
-                <motion.div
-                  style={{ background: 'var(--accent)', height: '100%', borderRadius: '9999px' }}
-                  initial={{ width: '0%' }}
-                  animate={{ width: `${progressPercent}%` }}
-                  transition={{ ease: 'easeOut', duration: 0.4 }}
-                />
-              </div>
-              <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>{progressPercent}% complete</p>
+              {progress.total > 0 && (
+                <>
+                  <div style={{ background: 'var(--bg-secondary)', borderRadius: '9999px', height: '12px', overflow: 'hidden' }}>
+                    <motion.div
+                      style={{ background: 'var(--accent)', height: '100%', borderRadius: '9999px' }}
+                      initial={{ width: '0%' }}
+                      animate={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
+                      transition={{ ease: 'easeOut', duration: 0.4 }}
+                    />
+                  </div>
+                  <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>{Math.round((progress.current / progress.total) * 100)}% complete</p>
+                </>
+              )}
             </div>
           )}
 
@@ -178,33 +205,31 @@ export const MigratePage: React.FC = () => {
             </div>
           )}
 
-          {status === 'done' && summary && (
+          {status === 'done' && (
             <motion.div variants={staggerContainer} initial="hidden" animate="visible">
               <motion.div variants={fadeInUp}>
                 <div className="alert alert-success" style={{ marginBottom: '1.5rem' }}>
-                  <strong>Migration complete.</strong> {summary.totalImported} of {summary.totalLeads} leads imported to Postgres.
+                  <strong>Migration complete.</strong> {totalImported} items imported to Postgres.
                 </div>
               </motion.div>
-              {summary.batches.length > 0 && (
+              {results.length > 0 && (
                 <motion.div variants={fadeInUp}>
-                  <h3 className="section-title" style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>Batch log</h3>
+                  <h3 className="section-title" style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>Migration log</h3>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                        <th style={{ textAlign: 'left', padding: '0.5rem' }}>Batch</th>
-                        <th style={{ textAlign: 'left', padding: '0.5rem' }}>Sent</th>
+                        <th style={{ textAlign: 'left', padding: '0.5rem' }}>Phase</th>
                         <th style={{ textAlign: 'left', padding: '0.5rem' }}>Imported</th>
                         <th style={{ textAlign: 'left', padding: '0.5rem' }}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {summary.batches.map((b) => (
-                        <tr key={b.batchIndex} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                          <td style={{ padding: '0.5rem' }}>#{b.batchIndex + 1}</td>
-                          <td style={{ padding: '0.5rem' }}>{b.sent}</td>
-                          <td style={{ padding: '0.5rem' }}>{b.imported}</td>
-                          <td style={{ padding: '0.5rem', color: b.error ? 'var(--color-error)' : 'var(--color-success)' }}>
-                            {b.error ? `Error: ${b.error}` : '✓ OK'}
+                      {results.map((r, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                          <td style={{ padding: '0.5rem' }}>{r.phase}</td>
+                          <td style={{ padding: '0.5rem' }}>{r.count}</td>
+                          <td style={{ padding: '0.5rem', color: r.error ? 'var(--color-error)' : 'var(--color-success)' }}>
+                            {r.error ? `Error: ${r.error}` : '✓ OK'}
                           </td>
                         </tr>
                       ))}

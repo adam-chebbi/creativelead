@@ -7,65 +7,110 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Organization {
-  id        String   @id            // Clerk orgId
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  sessions  Session[]
+  workspaceMemberships WorkspaceMember[]
+}
+
+model VerificationToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([workspaceId])
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
   name      String
   createdAt DateTime @default(now())
   leads     Lead[]
   campaigns Campaign[]
   auditLogs AuditLog[]
+  settings      WorkspaceSettings?
+  secrets       WorkspaceSecret[]
+  quotaCounters QuotaCounter[]
+  members       WorkspaceMember[]
+}
+
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String   @default("owner")
+  createdAt   DateTime @default(now())
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
 }
 
 model Lead {
-  id             String   @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  businessName   String
-  category       String?
-  address        String?
-  city           String?
-  phone          String?
-  website        String?
-  email          String?
-  rating         Float?
-  reviewCount    Int?
-  aiScore        Float?
-  classification String?
-  pipelineStage  String   @default("new")
-  ownerId        String?
-  createdById    String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  notes          LeadNote[]
-  followUps      FollowUp[]
-  attachments    LeadAttachment[]
-  stageHistory   PipelineStageEntry[]
-
-  // New AI & Score Fields
-  opportunityScore    Float?
-  competitionScore    Float?
-  growthScore         Float?
-  seoWeakness         Float?
-  websiteQuality      Float?
-  reviewReputation    Float?
+  id               String   @id @default(cuid())
+  workspaceId      String
+  workspace        Workspace @relation(fields: [workspaceId], references: [id])
+  businessName     String
+  category         String?
+  address          String?
+  city             String?
+  phone            String?
+  website          String?
+  email            String?
+  rating           Float?
+  reviewCount      Int?
+  aiScore          Float?
+  classification   String?
+  pipelineStage    String   @default("new")
+  ownerId          String?
+  createdById      String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  notes            LeadNote[]
+  followUps        FollowUp[]
+  attachments      LeadAttachment[]
+  stageHistory     PipelineStageEntry[]
+  opportunityScore Float?
+  competitionScore Float?
+  growthScore      Float?
+  seoWeakness      Float?
+  websiteQuality   Float?
+  reviewReputation Float?
   aiScoreLastComputed DateTime?
   aiScoreInputsHash   String?
-  latitude            Float?
-  longitude           Float?
-
-  // Relations to new tables
+  latitude         Float?
+  longitude        Float?
   enrichment       LeadEnrichment?
   opportunity      LeadOpportunity?
   outreachMessages OutreachMessage[]
   websiteIntel     LeadWebsiteIntelligence?
   backgroundJobs   BackgroundJob[]
 
-  @@index([organizationId, pipelineStage])
-  @@index([organizationId, aiScore])
+  @@index([workspaceId, pipelineStage])
+  @@index([workspaceId, aiScore])
   @@index([city, category])
   @@index([latitude, longitude])
   @@index([pipelineStage])
-  @@unique([organizationId, phone])
+  @@unique([workspaceId, phone])
 }
 
 model LeadEnrichment {
@@ -107,7 +152,7 @@ model OutreachMessage {
   id               String   @id @default(cuid())
   leadId           String
   lead             Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  channel          String   // email, linkedin, whatsapp, proposal_intro
+  channel          String
   subject          String?
   body             String
   editedByHuman    Boolean  @default(false)
@@ -144,7 +189,7 @@ model BackgroundJob {
   id           String    @id @default(cuid())
   leadId       String
   lead         Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  jobType      String    // website-intelligence, enrichment, scoring, opportunity
+  jobType      String
   status       String    @default("queued")
   errorMessage String?
   startedAt    DateTime?
@@ -162,6 +207,8 @@ model LeadNote {
   authorId  String
   body      String
   createdAt DateTime @default(now())
+
+  @@index([leadId])
 }
 
 model FollowUp {
@@ -171,6 +218,9 @@ model FollowUp {
   dueAt        DateTime
   assignedToId String
   status       String   @default("pending")
+
+  @@index([leadId])
+  @@index([status])
 }
 
 model LeadAttachment {
@@ -179,6 +229,8 @@ model LeadAttachment {
   lead         Lead     @relation(fields:[leadId], references:[id])
   fileUrl      String
   uploadedById String
+
+  @@index([leadId])
 }
 
 model PipelineStageEntry {
@@ -191,26 +243,85 @@ model PipelineStageEntry {
 }
 
 model Campaign {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  name           String
-  channel        String
-  status         String       @default("draft")
-  createdById    String
-  createdAt      DateTime     @default(now())
+  id          String       @id @default(cuid())
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id])
+  name        String
+  channel     String
+  status      String       @default("draft")
+  createdById String
+  createdAt   DateTime     @default(now())
+  ledgerEntries CampaignLedgerEntry[]
+
+  @@index([workspaceId])
+}
+
+model CampaignLedgerEntry {
+  id              String    @id @default(cuid())
+  campaignId      String
+  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  leadUrl         String?
+  businessName    String?
+  channel         String?
+  recipient       String?
+  status          String    @default("pending") // pending | sent | failed | replied
+  subject         String?
+  body            String?
+  nextScheduledAt DateTime?
+  sentAt          DateTime?
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+
+  @@index([campaignId])
+  @@index([status])
+}
+
+model WorkspaceSettings {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  settings    Json
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}
+
+model WorkspaceSecret {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  key            String   // e.g. "ai/openai", "ai/gemini", "smtp", "twilio", "google-sheets"
+  encryptedValue String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId])
+}
+
+model QuotaCounter {
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  metric      String   // leads_ingested | enrichment_runs | crm_exports | outreach_generations | campaign_sends
+  date        DateTime // midnight UTC
+  count       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, metric, date])
+  @@index([workspaceId, date])
 }
 
 model AuditLog {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  actorId        String
-  action         String
-  targetType     String?
-  targetId       String?
-  metadata       Json?
-  createdAt      DateTime     @default(now())
+  id          String       @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  actorId     String
+  action      String
+  targetType  String?
+  targetId    String?
+  metadata    Json?
+  createdAt   DateTime     @default(now())
 
-  @@index([organizationId, createdAt])
+  @@index([workspaceId, createdAt])
 }

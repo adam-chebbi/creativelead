@@ -7,20 +7,68 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Organization {
-  id        String   @id            // Clerk orgId
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  sessions  Session[]
+  workspaceMemberships WorkspaceMember[]
+}
+
+model VerificationToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([workspaceId])
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
   name      String
   createdAt DateTime @default(now())
   leads     Lead[]
   campaigns Campaign[]
   auditLogs AuditLog[]
-  settings  OrganizationSettings?
+  settings      WorkspaceSettings?
+  secrets       WorkspaceSecret[]
+  quotaCounters QuotaCounter[]
+  members       WorkspaceMember[]
+}
+
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String   @default("owner") // owner | member
+  createdAt   DateTime @default(now())
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
 }
 
 model Lead {
   id             String   @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
   businessName   String
   category       String?
   address        String?
@@ -61,12 +109,12 @@ model Lead {
   websiteIntel     LeadWebsiteIntelligence?
   backgroundJobs   BackgroundJob[]
 
-  @@index([organizationId, pipelineStage])
-  @@index([organizationId, aiScore])
+  @@index([workspaceId, pipelineStage])
+  @@index([workspaceId, aiScore])
   @@index([city, category])
   @@index([latitude, longitude])
   @@index([pipelineStage])
-  @@unique([organizationId, phone])
+  @@unique([workspaceId, phone])
 }
 
 model LeadEnrichment {
@@ -199,31 +247,79 @@ model PipelineStageEntry {
 }
 
 model Campaign {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  name           String
-  channel        String
-  status         String       @default("draft")
-  createdById    String
-  createdAt      DateTime     @default(now())
+  id          String       @id @default(cuid())
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id])
+  name        String
+  channel     String
+  status      String       @default("draft")
+  createdById String
+  createdAt   DateTime     @default(now())
+  ledgerEntries CampaignLedgerEntry[]
 
-  @@index([organizationId])
+  @@index([workspaceId])
 }
 
-model OrganizationSettings {
+model CampaignLedgerEntry {
+  id              String    @id @default(cuid())
+  campaignId      String
+  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  leadUrl         String?
+  businessName    String?
+  channel         String?
+  recipient       String?
+  status          String    @default("pending") // pending | sent | failed | replied
+  subject         String?
+  body            String?
+  nextScheduledAt DateTime?
+  sentAt          DateTime?
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+
+  @@index([campaignId])
+  @@index([status])
+}
+
+model WorkspaceSettings {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  settings    Json
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}
+
+model WorkspaceSecret {
   id             String   @id @default(cuid())
-  organizationId String   @unique
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  settings       Json
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  key            String   // e.g. "ai/openai", "ai/gemini", "smtp", "twilio", "google-sheets"
+  encryptedValue String
+  createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  updatedById    String?
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId])
+}
+
+model QuotaCounter {
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  metric      String   // leads_ingested | enrichment_runs | crm_exports | outreach_generations | campaign_sends
+  date        DateTime // midnight UTC
+  count       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, metric, date])
+  @@index([workspaceId, date])
 }
 
 model AuditLog {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  id          String       @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
   actorId        String
   action         String
   targetType     String?
@@ -231,5 +327,5 @@ model AuditLog {
   metadata       Json?
   createdAt      DateTime     @default(now())
 
-  @@index([organizationId, createdAt])
+  @@index([workspaceId, createdAt])
 }

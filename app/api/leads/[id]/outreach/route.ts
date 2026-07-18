@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateAndPersistMessage, generateAllMessagesForLead, batchGenerateMessages } from '@/utils/outreach-server';
+import { incrementCounter } from '@/lib/quota';
 
 const CHANNEL_MAP: Record<string, string> = {
   email: 'email',
@@ -19,9 +20,11 @@ const CHANNEL_MAP_REVERSE: Record<string, string> = {
   phoneScript: 'phoneScript',
 };
 
-async function fetchMessagesForLead(leadId: string) {
+async function fetchMessagesForLead(leadId: string, workspaceId?: string) {
+  const where: any = { leadId };
+  if (workspaceId) where.lead = { workspaceId };
   const records = await prisma.outreachMessage.findMany({
-    where: { leadId },
+    where,
   });
   const messages: Record<string, { subject?: string; body: string; edited: boolean }> = {};
   for (const r of records) {
@@ -32,11 +35,11 @@ async function fetchMessagesForLead(leadId: string) {
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  let userId, orgId;
+  let userId, workspaceId;
   try {
     const authContext = await requireAuth(req);
     userId = authContext.userId;
-    orgId = authContext.orgId;
+    workspaceId = authContext.workspaceId;
   } catch {
     return new NextResponse('Unauthorized', { status: 401 });
   }
@@ -53,7 +56,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     // Batch generation across leads
     if (leadIds && Array.isArray(leadIds)) {
-      const result = await batchGenerateMessages(leadIds, orgId, aiConfig);
+      const result = await batchGenerateMessages(leadIds, workspaceId, aiConfig);
+      incrementCounter(workspaceId, 'outreach_generations', leadIds.length).catch(() => {});
       return NextResponse.json(result);
     }
 
@@ -63,21 +67,23 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       if (!validChannels.includes(channel)) {
         return NextResponse.json({ error: `Invalid channel. Must be one of: ${validChannels.join(', ')}` }, { status: 400 });
       }
-      const result = await generateAndPersistMessage(params.id, orgId, channel as any, aiConfig);
-      if (result.editedBlocked) {
-        return NextResponse.json({ editedBlocked: true, error: result.error }, { status: 409 });
+      const genResult = await generateAndPersistMessage(params.id, workspaceId, channel as any, aiConfig);
+      if (genResult.editedBlocked) {
+        return NextResponse.json({ editedBlocked: true, error: genResult.error }, { status: 409 });
       }
-      if (!result.ok) {
-        return NextResponse.json({ error: result.error || 'Generation failed' }, { status: 500 });
+      if (!genResult.ok) {
+        return NextResponse.json({ error: genResult.error || 'Generation failed' }, { status: 500 });
       }
-      const allMessages = await fetchMessagesForLead(params.id);
+      incrementCounter(workspaceId, 'outreach_generations').catch(() => {});
+      const allMessages = await fetchMessagesForLead(params.id, workspaceId);
       return NextResponse.json({ ok: true, messages: allMessages });
     }
 
     // All channels for a single lead
-    const result = await generateAllMessagesForLead(params.id, orgId, aiConfig);
-    const allMessages = await fetchMessagesForLead(params.id);
-    return NextResponse.json({ ok: true, messages: allMessages, results: result.results });
+    const genResult = await generateAllMessagesForLead(params.id, workspaceId, aiConfig);
+    incrementCounter(workspaceId, 'outreach_generations').catch(() => {});
+    const allMessages = await fetchMessagesForLead(params.id, workspaceId);
+    return NextResponse.json({ ok: true, messages: allMessages, results: genResult.results });
   } catch (error) {
     console.error('[OUTREACH_POST]', error);
     return NextResponse.json({ error: 'Internal Error' }, { status: 500 });

@@ -247,8 +247,12 @@ test.describe('FLOW 3: Pipeline & Leads', () => {
     await signIn(page);
     await page.goto(`${BASE_URL}/pipeline`, { waitUntil: 'networkidle' });
     const leadName = `E2E Test Auto ${RUN_ID}`;
+    const uniqueSuffix = RUN_ID.toString().slice(-6);
+    const phoneNumber = `+21650${uniqueSuffix}`;
+    const email = `e2e-${uniqueSuffix}@test.com`;
+    const website = `https://e2e-${uniqueSuffix}.com`;
     // Use POST /api/leads/bulk-import to create a single lead
-    const result = await page.evaluate(async ({ baseUrl, businessName }) => {
+    const result = await page.evaluate(async ({ baseUrl, businessName, phone, mail, site }) => {
       try {
         const res = await fetch(`${baseUrl}/api/leads/bulk-import`, {
           method: 'POST',
@@ -256,9 +260,9 @@ test.describe('FLOW 3: Pipeline & Leads', () => {
           body: JSON.stringify([{
             business_name: businessName,
             category: 'Auto Repair',
-            website: 'https://testautogarage-e2e.com',
-            phone_number: '+21650123456',
-            email: 'contact@testautogarage-e2e.com',
+            website: site,
+            phone_number: phone,
+            email: mail,
             city: 'Tunis',
             address: '123 Test Street',
             rating: 3.8,
@@ -270,7 +274,7 @@ test.describe('FLOW 3: Pipeline & Leads', () => {
       } catch (err) {
         return { ok: false, status: 0, body: { error: String(err) } };
       }
-    }, { baseUrl: BASE_URL, businessName: leadName });
+    }, { baseUrl: BASE_URL, businessName: leadName, phone: phoneNumber, mail: email, site: website });
     report(`Create lead response: ${JSON.stringify(result)}`);
     expect(result.ok).toBeTruthy();
     expect(result.body.success).toBe(true);
@@ -325,34 +329,35 @@ test.describe('FLOW 3: Pipeline & Leads', () => {
       report(`Lead detail: ${JSON.stringify(result.body).substring(0, 500)}`);
     }
     expect(result.ok).toBeTruthy();
-    expect(result.body.businessName).toBe('Test Auto Garage E2E');
+    expect(result.body.businessName).toContain('E2E Test Auto');
   });
 });
+
+// ─── Shared API helpers (must be outside describe blocks) ─────────────
+async function apiPost(page: Page, url: string, data: any) {
+  return page.evaluate(async ({ url, data }) => {
+    try {
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      const text = await res.text();
+      return { ok: res.ok, status: res.status, body: text ? JSON.parse(text) : {} };
+    } catch (err) { return { ok: false, status: 0, body: { error: String(err) } }; }
+  }, { url, data });
+}
+
+async function apiGet(page: Page, url: string) {
+  return page.evaluate(async (url) => {
+    try {
+      const res = await fetch(url);
+      const text = await res.text();
+      return { ok: res.ok, status: res.status, body: text ? JSON.parse(text) : {} };
+    } catch (err) { return { ok: false, status: 0, body: { error: String(err) } }; }
+  }, url);
+}
 
 // ══════════════════════════════════════════════════════════════════════
 // FLOW 4: ENRICHMENT
 // ══════════════════════════════════════════════════════════════════════
 test.describe('FLOW 4: Enrichment & Website Intelligence', () => {
-
-  async function apiPost(page: Page, url: string, data: any) {
-    return page.evaluate(async ({ url, data }) => {
-      try {
-        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-        const text = await res.text();
-        return { ok: res.ok, status: res.status, body: text ? JSON.parse(text) : {} };
-      } catch (err) { return { ok: false, status: 0, body: { error: String(err) } }; }
-    }, { url, data });
-  }
-
-  async function apiGet(page: Page, url: string) {
-    return page.evaluate(async (url) => {
-      try {
-        const res = await fetch(url);
-        const text = await res.text();
-        return { ok: res.ok, status: res.status, body: text ? JSON.parse(text) : {} };
-      } catch (err) { return { ok: false, status: 0, body: { error: String(err) } }; }
-    }, url);
-  }
 
   test('4.1 - Trigger website intelligence scan', async ({ page }) => {
     await signIn(page);

@@ -9,8 +9,8 @@ function makeGetRequest(params: Record<string, string> = {}): Request {
 }
 
 const mockLeads = [
-  { id: 'lead_1', organizationId: 'org_456', businessName: 'Acme Pizza' },
-  { id: 'lead_2', organizationId: 'org_456', businessName: 'Bob Burgers' },
+  { id: 'lead_1', workspaceId: 'ws_456', businessName: 'Acme Pizza' },
+  { id: 'lead_2', workspaceId: 'ws_456', businessName: 'Bob Burgers' },
 ];
 
 describe('GET /api/leads', () => {

@@ -74,9 +74,9 @@ const OUTREACH_CHANNELS: ChannelSpec[] = [
   },
 ];
 
-async function getLeadContext(leadId: string, orgId: string): Promise<LeadContext | null> {
+async function getLeadContext(leadId: string, workspaceId: string): Promise<LeadContext | null> {
   const lead = await prisma.lead.findFirst({
-    where: { id: leadId, organizationId: orgId },
+    where: { id: leadId, workspaceId: workspaceId },
     include: {
       enrichment: true,
       opportunity: true,
@@ -230,11 +230,11 @@ async function callAiForMessage(
 
 export async function generateAndPersistMessage(
   leadId: string,
-  orgId: string,
+  workspaceId: string,
   channel: 'email' | 'linkedin' | 'whatsapp' | 'proposalIntro' | 'phoneScript',
   aiConfig: AiOutreachConfig,
 ): Promise<{ ok: boolean; error?: string; editedBlocked?: boolean }> {
-  const ctx = await getLeadContext(leadId, orgId);
+  const ctx = await getLeadContext(leadId, workspaceId);
   if (!ctx) return { ok: false, error: 'Lead not found' };
 
   const existing = await prisma.outreachMessage.findUnique({
@@ -294,7 +294,7 @@ export async function generateAndPersistMessage(
 
 export async function generateAllMessagesForLead(
   leadId: string,
-  orgId: string,
+  workspaceId: string,
   aiConfig: AiOutreachConfig,
 ): Promise<{
   ok: boolean;
@@ -303,7 +303,7 @@ export async function generateAllMessagesForLead(
   const results: Record<string, { ok: boolean; error?: string; editedBlocked?: boolean }> = {};
 
   for (const spec of OUTREACH_CHANNELS) {
-    const result = await generateAndPersistMessage(leadId, orgId, spec.key, aiConfig);
+    const result = await generateAndPersistMessage(leadId, workspaceId, spec.key, aiConfig);
     results[spec.key] = result;
   }
 
@@ -313,7 +313,7 @@ export async function generateAllMessagesForLead(
 
 export async function batchGenerateMessages(
   leadIds: string[],
-  orgId: string,
+  workspaceId: string,
   aiConfig: AiOutreachConfig,
 ): Promise<{
   results: Record<string, { ok: boolean; results?: Record<string, any>; error?: string }>;
@@ -322,7 +322,7 @@ export async function batchGenerateMessages(
 
   for (const leadId of leadIds) {
     try {
-      const r = await generateAllMessagesForLead(leadId, orgId, aiConfig);
+      const r = await generateAllMessagesForLead(leadId, workspaceId, aiConfig);
       results[leadId] = { ok: r.ok, results: r.results };
     } catch (err) {
       results[leadId] = { ok: false, error: err instanceof Error ? err.message : 'Unknown error' };
